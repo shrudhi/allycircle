@@ -116,6 +116,43 @@ describe("ranking", () => {
     );
     expect(ranked[0].ally.id).toBe("new-no-topics");
   });
+
+  it("uses shared topics and an active search to rank allies without hiding anyone", () => {
+    const now = new Date("2026-09-21T12:00:00Z");
+    const ranked = rankAllies(
+      [
+        {
+          id: "casual-no-topics",
+          fieldMatch: true,
+          targetRoleAligned: false,
+          lastMeaningfulAt: now,
+          experienceYears: 6,
+          viewerExperienceYears: 5,
+          topicOverlapCount: 0,
+          hasDeclaredTopics: false,
+          hasUpcomingAvailability: true,
+          recentPageOneImpressions: 0,
+          interviewPaceActive: false,
+        },
+        {
+          id: "active-overlap",
+          fieldMatch: true,
+          targetRoleAligned: false,
+          lastMeaningfulAt: now,
+          experienceYears: 6,
+          viewerExperienceYears: 5,
+          topicOverlapCount: 2,
+          hasDeclaredTopics: true,
+          hasUpcomingAvailability: true,
+          recentPageOneImpressions: 0,
+          interviewPaceActive: true,
+        },
+      ],
+      now
+    );
+    expect(ranked[0].ally.id).toBe("active-overlap");
+    expect(ranked.map((row) => row.ally.id)).toContain("casual-no-topics");
+  });
 });
 
 describe("scheduling and sessions", () => {

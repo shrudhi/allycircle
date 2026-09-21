@@ -89,6 +89,7 @@ export const profiles = pgTable("profiles", {
   timezone: text("timezone").notNull(),
   openToBeInterviewed: boolean("open_to_be_interviewed").notNull().default(true),
   openToInterviewOthers: boolean("open_to_interview_others").notNull().default(true),
+  interviewPace: text("interview_pace").notNull().default("active"),
   onboardingComplete: boolean("onboarding_complete").notNull().default(false),
   termsAcceptedAt: ts("terms_accepted_at"),
   lastMeaningfulAt: ts("last_meaningful_at"),
@@ -105,6 +106,7 @@ export const education = pgTable("education", {
     .references(() => user.id, { onDelete: "cascade" }),
   school: text("school").notNull(),
   degree: text("degree"),
+  course: text("course"),
   year: text("year"),
 });
 
@@ -308,6 +310,24 @@ export const feedback = pgTable("feedback", {
   privateImprovement: text("private_improvement"),
   createdAt: ts("created_at").notNull(),
 });
+
+export const superLikes = pgTable(
+  "super_likes",
+  {
+    id: text("id").primaryKey(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => practiceSessions.id, { onDelete: "cascade" }),
+    fromUserId: text("from_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    toUserId: text("to_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: ts("created_at").notNull(),
+  },
+  (table) => [uniqueIndex("super_likes_session_from_idx").on(table.sessionId, table.fromUserId)]
+);
 
 export const testimonials = pgTable("testimonials", {
   id: text("id").primaryKey(),

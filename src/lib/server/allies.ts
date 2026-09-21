@@ -7,19 +7,46 @@ import { markMeaningful, track } from "@/lib/analytics/track";
 import { requireMarketplaceUser, requireSessionUser } from "@/lib/auth/session";
 import { getDb, getNow } from "@/lib/db";
 import {
-  employment,
+  conversations,
   education,
+  employment,
+  feedback,
+  practiceRequests,
   practiceSessions,
   profiles,
   recommendationLogs,
   savedAllies,
+  superLikes,
   testimonials,
   userTopics,
 } from "@/lib/db/schema";
 import { canInterview, canOfferReciprocalSwap } from "@/lib/domain/eligibility";
 import { matchReasons, rankAllies } from "@/lib/domain/ranking";
 import { helpedPeersCopy, interviewerIdsForCompletedSession } from "@/lib/domain/scheduling";
+import { interviewPaceLabel } from "@/lib/domain/copy";
 import { pairAllowed } from "@/lib/server/safety";
+
+async function pastConnectionIds(userId: string) {
+  const db = await getDb();
+  const ids = new Set<string>();
+  const sessions = await db.select().from(practiceSessions);
+  for (const row of sessions) {
+    if (row.requesterId === userId) ids.add(row.receiverId);
+    if (row.receiverId === userId) ids.add(row.requesterId);
+  }
+  const requests = await db.select().from(practiceRequests);
+  for (const row of requests) {
+    if (row.requesterId === userId) ids.add(row.receiverId);
+    if (row.receiverId === userId) ids.add(row.requesterId);
+  }
+  const threads = await db.select().from(conversations);
+  for (const row of threads) {
+    if (row.userLowId === userId) ids.add(row.userHighId);
+    if (row.userHighId === userId) ids.add(row.userLowId);
+  }
+  ids.delete(userId);
+  return ids;
+}
 
 function fieldLabel(fieldId: string, fieldCustom?: string | null) {
   return resolveProfessionalField({ fieldId, fieldCustom }).label;
@@ -55,7 +82,7 @@ export async function findAllies(input: {
   minExperience?: number;
   company?: string;
   topic?: string;
-  tab?: "for-you" | "active" | "saved";
+  tab?: "for-you" | "connected" | "saved";
   cursor?: string | null;
 }) {
   const current = await requireMarketplaceUser();
@@ -66,6 +93,8 @@ export async function findAllies(input: {
   const topics = await db.select().from(userTopics);
   const saved = await db.select().from(savedAllies).where(eq(savedAllies.viewerId, current.id));
   const savedIds = new Set(saved.map((row) => row.allyId));
+  const connectedIds = input.tab === "connected" ? await pastConnectionIds(current.id) : null;
+  const jobs = await db.select().from(employment);
 
   const eligible: { ally: typeof allProfiles[number]; allyTopics: typeof topics }[] = [];
   for (const ally of allProfiles) {
@@ -91,11 +120,7 @@ export async function findAllies(input: {
       continue;
     }
     if (input.tab === "saved" && !savedIds.has(ally.userId)) continue;
-    if (input.tab === "active") {
-      if (!ally.lastMeaningfulAt) continue;
-      const days = (now.getTime() - ally.lastMeaningfulAt.getTime()) / (24 * 60 * 60 * 1000);
-      if (days > 7) continue;
-    }
+    if (input.tab === "connected" && !connectedIds?.has(ally.userId)) continue;
     if (input.fieldId && ally.fieldId !== input.fieldId) continue;
     if (typeof input.minExperience === "number" && ally.experienceYears < input.minExperience) continue;
     if (input.company) {
@@ -106,12 +131,14 @@ export async function findAllies(input: {
       const needle = input.topic.toLowerCase();
       if (!allyTopics.some((topic) => topic.label.toLowerCase().includes(needle))) continue;
     }
+    const allyJobs = jobs.filter((job) => job.userId === ally.userId);
     const haystack = [
       ally.fullName,
       ally.currentTitle,
       ally.currentCompany,
       fieldLabel(ally.fieldId, ally.fieldCustom),
       ...allyTopics.map((topic) => topic.label),
+      ...allyJobs.map((job) => `${job.company} ${job.title || ""}`),
     ]
       .filter(Boolean)
       .join(" ")
@@ -140,6 +167,7 @@ export async function findAllies(input: {
         hasDeclaredTopics: allyTopics.length > 0,
         hasUpcomingAvailability: true,
         recentPageOneImpressions: 0,
+        interviewPaceActive: ally.interviewPace !== "casual",
       };
     }),
     now
@@ -168,6 +196,7 @@ export async function findAllies(input: {
       lastMeaningfulAt: row.ally.lastMeaningfulAt,
       overlappingTopics: overlap,
       now,
+      interviewPace: row.ally.interviewPace,
     });
     await db.insert(recommendationLogs).values({
       id: nanoid(),
@@ -192,6 +221,8 @@ export async function findAllies(input: {
           ? "Active this month"
           : null,
       helpedCopy: helpedPeersCopy(helped),
+      interviewPace: interviewPaceLabel(row.ally.interviewPace),
+      topics: row.allyTopics.map((topic) => topic.label).slice(0, 4),
       reasons,
       saved: savedIds.has(row.ally.userId),
       canSwap: canOfferReciprocalSwap(
@@ -260,6 +291,7 @@ export async function getAllyProfile(allyId: string) {
     lastMeaningfulAt: ally.lastMeaningfulAt,
     overlappingTopics: overlap,
     now,
+    interviewPace: ally.interviewPace,
   });
   const canSwap = canOfferReciprocalSwap(
     {
@@ -281,6 +313,7 @@ export async function getAllyProfile(allyId: string) {
     true
   );
   await track(analyticsEvents.ally_profile_viewed, { userId: current.id, properties: { allyId } });
+  const likes = await db.select().from(superLikes).where(eq(superLikes.toUserId, allyId));
   return {
     ally,
     fieldLabel: fieldLabel(ally.fieldId, ally.fieldCustom),
@@ -293,6 +326,8 @@ export async function getAllyProfile(allyId: string) {
     reasons,
     canSwap,
     takingABreak: !ally.openToBeInterviewed && !ally.openToInterviewOthers,
+    interviewPace: interviewPaceLabel(ally.interviewPace),
+    superLikeCount: likes.length,
   };
 }
 
@@ -332,16 +367,50 @@ export async function getHomeData() {
     .select()
     .from(practiceSessions)
     .where(eq(practiceSessions.receiverId, current.id));
-  const sessions = [...upcoming, ...upcomingB]
-    .filter((row, index, all) => all.findIndex((item) => item.id === row.id) === index)
+  const allSessions = [...upcoming, ...upcomingB].filter(
+    (row, index, all) => all.findIndex((item) => item.id === row.id) === index
+  );
+  const sessions = allSessions
     .filter((row) => row.state === "scheduled" || row.state === "awaiting_attendance")
     .filter((row) => row.endUtc.getTime() + 30 * 60 * 1000 >= now.getTime())
     .sort((a, b) => a.startUtc.getTime() - b.startUtc.getTime());
   return {
     needsOnboarding: false as const,
     name: current.profile.fullName,
+    fieldLabel: fieldLabel(current.profile.fieldId, current.profile.fieldCustom),
     nextSession: sessions[0] || null,
     takingABreak: !current.profile.openToBeInterviewed && !current.profile.openToInterviewOthers,
+    isNew: allSessions.length === 0,
+  };
+}
+
+export async function getRecordData() {
+  const current = await requireMarketplaceUser();
+  const db = await getDb();
+  const interviewsGiven = await interviewsConductedCount(current.id);
+  const requests = await db.select().from(practiceRequests);
+  const people = await db.select().from(profiles);
+  const nameFor = (userId: string) => people.find((row) => row.userId === userId)?.fullName || "Ally";
+  const mine = requests.filter((row) => row.requesterId === current.id || row.receiverId === current.id);
+  const pending = mine
+    .filter((row) => ["pending", "alternate_time_proposed", "time_unavailable"].includes(row.state))
+    .map((row) => ({
+      ...row,
+      otherName: nameFor(row.requesterId === current.id ? row.receiverId : row.requesterId),
+      direction: row.requesterId === current.id ? "sent" : "received",
+    }));
+  const notes = await db.select().from(feedback).where(eq(feedback.toUserId, current.id));
+  const quotes = await db.select().from(testimonials).where(eq(testimonials.toUserId, current.id));
+  const likes = await db.select().from(superLikes).where(eq(superLikes.toUserId, current.id));
+  return {
+    interviewsGiven,
+    pending,
+    feedback: notes.map((row) => ({
+      ...row,
+      fromName: nameFor(row.fromUserId),
+    })),
+    testimonials: quotes,
+    superLikeCount: likes.length,
   };
 }
 

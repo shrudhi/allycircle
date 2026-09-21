@@ -41,6 +41,7 @@ Development-only tools:
 - `/dev/inbox` — password reset and notification emails
 - `/dev/clock` — jump the server clock to test Join Session (T-15 through end+30), reminders, and request expiry
 - `/internal/metrics` — funnel and product health
+- `/record` — interviews given, pending requests, notes, and testimonial visibility
 
 ## What is mocked until you connect accounts
 

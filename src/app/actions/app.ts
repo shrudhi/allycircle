@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
   saveProfileSetup,
-  saveAvailability,
+  addAvailabilityWindows,
   removeAvailabilityWindow,
   connectMockCalendar,
   disconnectCalendar,
@@ -22,6 +22,7 @@ import {
   markNotificationsRead,
   proposeReschedule,
   respondToReschedule,
+  superLikeAlly,
 } from "@/lib/server/sessions";
 import { blockUser, reportUser } from "@/lib/server/moderation";
 import { saveProfilePhoto } from "@/lib/server/photos";
@@ -31,24 +32,39 @@ import type { RequestFormat } from "@/lib/domain/types";
 import type { ReportReason } from "@/lib/domain/types";
 
 export async function saveProfileAction(formData: FormData) {
-  const topics = formData.getAll("topics").map(String);
+  const topics = formData.getAll("topics").map(String).map((item) => item.trim()).filter(Boolean);
+  const companies = formData.getAll("jobCompany").map(String);
+  const titles = formData.getAll("jobTitle").map(String);
+  const years = formData.getAll("jobYear").map(String);
+  const jobs = companies.map((company, index) => ({
+    company,
+    title: titles[index] || "",
+    year: years[index] || "",
+  }));
+  const schoolNames = formData.getAll("schoolName").map(String);
+  const degrees = formData.getAll("schoolDegree").map(String);
+  const courses = formData.getAll("schoolCourse").map(String);
+  const schools = schoolNames.map((school, index) => ({
+    school,
+    degree: degrees[index] || "",
+    course: courses[index] || "",
+  }));
   await saveProfileSetup({
     fullName: String(formData.get("fullName") || ""),
     stage: String(formData.get("stage") || "working_professional"),
     fieldId: String(formData.get("fieldId") || ""),
     fieldCustom: String(formData.get("fieldCustom") || ""),
-    currentTitle: String(formData.get("currentTitle") || ""),
     experienceYears: Number(formData.get("experienceYears") || 0),
-    currentCompany: String(formData.get("currentCompany") || ""),
     targetRole: String(formData.get("targetRole") || ""),
-    school: String(formData.get("school") || ""),
-    degree: String(formData.get("degree") || ""),
     bio: String(formData.get("bio") || ""),
     linkedinUrl: String(formData.get("linkedinUrl") || ""),
     timezone: String(formData.get("timezone") || "UTC"),
     openToBeInterviewed: formData.get("openToBeInterviewed") === "on",
     openToInterviewOthers: formData.get("openToInterviewOthers") === "on",
+    interviewPace: String(formData.get("interviewPace") || "active"),
     topics,
+    jobs,
+    schools,
   });
   const photo = formData.get("photo");
   if (photo instanceof File && photo.size > 0) {
@@ -140,30 +156,16 @@ export async function feedbackAction(formData: FormData) {
 export async function testimonialVisibilityAction(formData: FormData) {
   await setTestimonialVisible(String(formData.get("id")), formData.get("visible") === "on");
   revalidatePath("/settings");
+  revalidatePath("/record");
 }
 
 export async function availabilityAction(formData: FormData) {
-  const weekday = Number(formData.get("weekday"));
-  const startHour = Number(formData.get("startHour"));
-  const endHour = Number(formData.get("endHour"));
-  const current = await (await import("@/lib/auth/session")).requireMarketplaceUser();
-  const { getDb } = await import("@/lib/db");
-  const { availabilityWindows } = await import("@/lib/db/schema");
-  const { eq } = await import("drizzle-orm");
-  const db = await getDb();
-  const existing = await db
-    .select()
-    .from(availabilityWindows)
-    .where(eq(availabilityWindows.userId, current.id));
-  const windows = existing.map((window) => ({
-    weekday: window.weekday,
-    startMinutes: window.startMinutes,
-    endMinutes: window.endMinutes,
-  }));
-  if (!Number.isNaN(weekday) && !Number.isNaN(startHour) && !Number.isNaN(endHour)) {
-    windows.push({ weekday, startMinutes: startHour * 60, endMinutes: endHour * 60 });
-  }
-  await saveAvailability(windows);
+  const days = formData.getAll("weekdays").map((value) => Number(value)).filter((value) => value >= 0 && value <= 6);
+  const startParts = String(formData.get("startTime") || "18:00").split(":");
+  const endParts = String(formData.get("endTime") || "21:00").split(":");
+  const startMinutes = Number(startParts[0] || 18) * 60 + Number(startParts[1] || 0);
+  const endMinutes = Number(endParts[0] || 21) * 60 + Number(endParts[1] || 0);
+  await addAvailabilityWindows(days.map((weekday) => ({ weekday, startMinutes, endMinutes })));
   revalidatePath("/settings");
 }
 
@@ -220,4 +222,10 @@ export async function deleteAccountAction() {
 export async function markReadAction() {
   await markNotificationsRead();
   revalidatePath("/notifications");
+}
+
+export async function superLikeAction(formData: FormData) {
+  await superLikeAlly(String(formData.get("sessionId")));
+  revalidatePath(`/practice/sessions/${String(formData.get("sessionId"))}`);
+  revalidatePath("/record");
 }

@@ -31,14 +31,15 @@ export async function saveProfileSetup(input: {
   experienceYears: number;
   currentCompany?: string;
   targetRole?: string;
-  school?: string;
-  degree?: string;
   bio?: string;
   linkedinUrl?: string;
   timezone: string;
   openToBeInterviewed: boolean;
   openToInterviewOthers: boolean;
+  interviewPace?: string;
   topics?: string[];
+  jobs?: { company: string; title?: string; year?: string }[];
+  schools?: { school: string; degree?: string; course?: string }[];
 }) {
   const current = await requireSessionUser();
   const db = await getDb();
@@ -53,21 +54,24 @@ export async function saveProfileSetup(input: {
   if (field.fieldId === OTHER_FIELD_ID && !field.fieldCustom) {
     throw new Error("Tell us your professional field, or choose one from the list.");
   }
+  const jobs = (input.jobs || []).filter((job) => job.company.trim());
+  const firstJob = jobs[0];
   const values = {
     userId: current.id,
     fullName: input.fullName.trim(),
     stage: input.stage,
     fieldId: field.fieldId,
     fieldCustom: field.fieldCustom,
-    currentTitle: input.currentTitle?.trim() || null,
+    currentTitle: firstJob?.title?.trim() || input.currentTitle?.trim() || null,
     experienceYears: Math.max(0, Math.min(10, input.experienceYears)),
-    currentCompany: input.currentCompany?.trim() || null,
+    currentCompany: firstJob?.company.trim() || input.currentCompany?.trim() || null,
     targetRole: input.targetRole?.trim() || null,
     bio: input.bio?.trim() || null,
     linkedinUrl: input.linkedinUrl?.trim() || null,
     timezone: input.timezone,
     openToBeInterviewed: input.openToBeInterviewed,
     openToInterviewOthers: input.openToInterviewOthers,
+    interviewPace: input.interviewPace === "casual" ? "casual" : "active",
     onboardingComplete: true,
     termsAcceptedAt: current.profile?.termsAcceptedAt || now,
     lastMeaningfulAt: now,
@@ -79,13 +83,25 @@ export async function saveProfileSetup(input: {
   } else {
     await db.insert(profiles).values(values);
   }
-  if (input.school?.trim()) {
-    await db.delete(education).where(eq(education.userId, current.id));
+  await db.delete(employment).where(eq(employment.userId, current.id));
+  for (const job of jobs) {
+    await db.insert(employment).values({
+      id: nanoid(),
+      userId: current.id,
+      company: job.company.trim(),
+      title: job.title?.trim() || null,
+      year: job.year?.trim() || null,
+    });
+  }
+  await db.delete(education).where(eq(education.userId, current.id));
+  for (const school of input.schools || []) {
+    if (!school.school.trim()) continue;
     await db.insert(education).values({
       id: nanoid(),
       userId: current.id,
-      school: input.school.trim(),
-      degree: input.degree?.trim() || null,
+      school: school.school.trim(),
+      degree: school.degree?.trim() || null,
+      course: school.course?.trim() || null,
     });
   }
   await db.delete(userTopics).where(eq(userTopics.userId, current.id));
@@ -116,12 +132,22 @@ export async function removeAvailabilityWindow(windowId: string) {
   await markMeaningful(current.id);
 }
 
-export async function saveAvailability(windows: { weekday: number; startMinutes: number; endMinutes: number }[]) {
+export async function addAvailabilityWindows(windows: { weekday: number; startMinutes: number; endMinutes: number }[]) {
   const current = await requireMarketplaceUser();
   const db = await getDb();
-  await db.delete(availabilityWindows).where(eq(availabilityWindows.userId, current.id));
+  const existing = await db
+    .select()
+    .from(availabilityWindows)
+    .where(eq(availabilityWindows.userId, current.id));
   for (const window of windows) {
     if (window.endMinutes <= window.startMinutes) continue;
+    const duplicate = existing.some(
+      (row) =>
+        row.weekday === window.weekday &&
+        row.startMinutes === window.startMinutes &&
+        row.endMinutes === window.endMinutes
+    );
+    if (duplicate) continue;
     await db.insert(availabilityWindows).values({
       id: nanoid(),
       userId: current.id,
@@ -228,12 +254,16 @@ export async function mySettings() {
     .where(eq(availabilityWindows.userId, current.id));
   const topics = await db.select().from(userTopics).where(eq(userTopics.userId, current.id));
   const quotes = await db.select().from(testimonials).where(eq(testimonials.toUserId, current.id));
+  const jobs = await db.select().from(employment).where(eq(employment.userId, current.id));
+  const schools = await db.select().from(education).where(eq(education.userId, current.id));
   return {
     profile: current.profile,
     calendar: cal || null,
     windows,
     topics,
     testimonials: quotes,
+    jobs,
+    schools,
     fields: professionalFields,
     suggestedTopics: topicsForField(current.profile.fieldId),
   };

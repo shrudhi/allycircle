@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   timezone text NOT NULL,
   open_to_be_interviewed boolean NOT NULL DEFAULT true,
   open_to_interview_others boolean NOT NULL DEFAULT true,
+  interview_pace text NOT NULL DEFAULT 'active',
   onboarding_complete boolean NOT NULL DEFAULT false,
   terms_accepted_at timestamptz,
   last_meaningful_at timestamptz,
@@ -71,6 +72,7 @@ CREATE TABLE IF NOT EXISTS education (
   user_id text NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
   school text NOT NULL,
   degree text,
+  course text,
   year text
 );
 CREATE TABLE IF NOT EXISTS employment (
@@ -254,4 +256,14 @@ CREATE TABLE IF NOT EXISTS time_overrides (
 );
 ALTER TABLE practice_sessions ADD COLUMN IF NOT EXISTS pending_reschedule_start_utc timestamptz;
 ALTER TABLE practice_sessions ADD COLUMN IF NOT EXISTS pending_reschedule_by text;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS interview_pace text NOT NULL DEFAULT 'active';
+ALTER TABLE education ADD COLUMN IF NOT EXISTS course text;
+CREATE TABLE IF NOT EXISTS super_likes (
+  id text PRIMARY KEY,
+  session_id text NOT NULL REFERENCES practice_sessions(id) ON DELETE CASCADE,
+  from_user_id text NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+  to_user_id text NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS super_likes_session_from_idx ON super_likes(session_id, from_user_id);
 `;

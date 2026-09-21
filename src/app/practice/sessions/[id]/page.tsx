@@ -9,10 +9,12 @@ import {
   cancelSessionAction,
   proposeRescheduleAction,
   respondRescheduleAction,
+  superLikeAction,
 } from "@/app/actions/app";
 import { JoinButton } from "@/components/join-button";
 import { Button } from "@/components/ui/button";
 import { formatInTimeZone } from "@/lib/domain/timezone";
+import { formatLabel } from "@/lib/domain/copy";
 import type { RequestFormat } from "@/lib/domain/types";
 
 export default async function SessionPage({ params }: { params: Promise<{ id: string }> }) {
@@ -31,8 +33,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       <p className="text-xs uppercase tracking-[0.16em] text-[#d4af37]">Session</p>
       <h1 className="mt-2 text-3xl font-semibold">{data.otherName}</h1>
       <p className="mt-2 text-[#a0a0a0]">
-        {session.format === "reciprocal_swap" ? "Reciprocal swap" : "Interview Me"} ·{" "}
-        {formatInTimeZone(session.startUtc, current.profile.timezone)}
+        {formatLabel(session.format, "detail")} · {formatInTimeZone(session.startUtc, current.profile.timezone)}
       </p>
       <p className="mt-4 text-sm">
         Room status:{" "}
@@ -131,9 +132,20 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         </form>
       ) : null}
       {session.state === "completed" ? (
-        <Link href={`/practice/sessions/${id}/feedback`} className="mt-6 inline-block text-sm text-[#d4af37]">
-          Leave feedback
-        </Link>
+        <div className="mt-6 space-y-3">
+          <Link href={`/practice/sessions/${id}/feedback`} className="inline-block text-sm text-[#d4af37]">
+            Leave a note for {data.otherName}
+          </Link>
+          {data.canSuperLike ? (
+            <form action={superLikeAction}>
+              <input type="hidden" name="sessionId" value={id} />
+              <Button className="gold-outline">Highlight their profile</Button>
+            </form>
+          ) : null}
+          {data.alreadySuperLiked ? (
+            <p className="text-sm text-[#a0a0a0]">You highlighted this profile after the session.</p>
+          ) : null}
+        </div>
       ) : null}
     </AppShell>
   );

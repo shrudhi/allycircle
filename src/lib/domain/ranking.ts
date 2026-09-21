@@ -1,4 +1,5 @@
 import { productConfig } from "@/lib/config/product";
+import { interviewPaceLabel } from "@/lib/domain/copy";
 
 export type RankableAlly = {
   id: string;
@@ -11,6 +12,7 @@ export type RankableAlly = {
   hasDeclaredTopics: boolean;
   hasUpcomingAvailability: boolean;
   recentPageOneImpressions: number;
+  interviewPaceActive?: boolean;
 };
 
 export type MatchReason = {
@@ -44,6 +46,7 @@ export function rankAllies(allies: RankableAlly[], now: Date) {
       const experience = experienceFitScore(ally.experienceYears, ally.viewerExperienceYears);
       const topic = ally.hasDeclaredTopics ? Math.min(1, ally.topicOverlapCount / 3) : 0;
       const availability = ally.hasUpcomingAvailability ? 1 : 0;
+      const pace = ally.interviewPaceActive ? 1 : 0.35;
       const freshnessPenalty = Math.min(1, ally.recentPageOneImpressions / 8);
       const score =
         (ally.fieldMatch ? 1 : 0) * weights.fieldAndTarget +
@@ -51,6 +54,7 @@ export function rankAllies(allies: RankableAlly[], now: Date) {
         activity * weights.activity +
         experience * weights.experienceFit +
         topic * weights.topicOverlap +
+        pace * weights.interviewPace +
         availability * weights.availability -
         freshnessPenalty * weights.freshnessBalance;
       return { ally, score };
@@ -67,6 +71,7 @@ export function matchReasons(input: {
   lastMeaningfulAt: Date | null;
   overlappingTopics: string[];
   now: Date;
+  interviewPace?: string | null;
 }): MatchReason[] {
   const reasons: MatchReason[] = [
     { code: "same_field", label: `Same ${input.fieldLabel} field` },
@@ -74,20 +79,23 @@ export function matchReasons(input: {
       code: "experience",
       label:
         input.experienceYears >= 10
-          ? "10+ years relevant experience"
-          : `${input.experienceYears} year${input.experienceYears === 1 ? "" : "s"} relevant experience`,
+          ? "10+ years in this kind of work"
+          : `${input.experienceYears} year${input.experienceYears === 1 ? "" : "s"} in this kind of work`,
     },
   ];
+  if (input.interviewPace === "active") {
+    reasons.push({ code: "pace", label: interviewPaceLabel("active") });
+  }
   const activity = activityScore(input.lastMeaningfulAt, input.now);
   if (activity >= 1) {
-    reasons.push({ code: "active_week", label: "Active this week" });
+    reasons.push({ code: "active_week", label: "Practiced or messaged this week" });
   } else if (activity >= 0.45) {
-    reasons.push({ code: "active_month", label: "Active this month" });
+    reasons.push({ code: "active_month", label: "Around this month" });
   }
   if (input.overlappingTopics[0]) {
     reasons.push({
       code: "topic",
-      label: `Can interview on ${input.overlappingTopics[0]}`,
+      label: `Can interview you on ${input.overlappingTopics[0]}`,
     });
   }
   return reasons.slice(0, 3);

@@ -30,6 +30,7 @@ export const analyticsEvents = {
   session_attendance_recorded: "session_attendance_recorded",
   session_completed: "session_completed",
   session_did_not_happen: "session_did_not_happen",
+  super_like_given: "super_like_given",
   meet_provision_started: "meet_provision_started",
   meet_provision_succeeded: "meet_provision_succeeded",
   meet_provision_failed: "meet_provision_failed",

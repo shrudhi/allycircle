@@ -109,3 +109,21 @@ export function isoDateInTimeZone(date: Date, timeZone: string) {
   const parts = tzParts(date, timeZone);
   return `${parts.year}-${pad(parts.month)}-${pad(parts.day)}`;
 }
+
+export function slotPickerViews(slots: { startUtc: Date }[], timeZone: string) {
+  return slots.map((slot) => ({
+    startIso: slot.startUtc.toISOString(),
+    dateKey: isoDateInTimeZone(slot.startUtc, timeZone),
+    dateLabel: new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    }).format(slot.startUtc),
+    timeLabel: new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(slot.startUtc),
+  }));
+}

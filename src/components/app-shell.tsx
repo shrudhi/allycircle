@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bell, CalendarDays, Home, MessageCircle, Search, Settings } from "lucide-react";
+import { Bell, CalendarDays, ClipboardList, Home, MessageCircle, Search, Settings } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { Initials } from "@/components/initials";
 import { getSessionUser } from "@/lib/auth/session";
@@ -16,6 +16,7 @@ const nav = [
   { href: "/home", label: "Home", icon: Home },
   { href: "/allies", label: "Find an Ally", icon: Search },
   { href: "/practice", label: "My Practice", icon: CalendarDays },
+  { href: "/record", label: "Record", icon: ClipboardList },
   { href: "/messages", label: "Messages", icon: MessageCircle },
 ];
 

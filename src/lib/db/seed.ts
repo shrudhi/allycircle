@@ -79,6 +79,7 @@ export async function seedDevelopmentData(db: Db) {
       openToInterviewOthers: true,
       onboardingComplete: true,
       lastMeaningfulAt: new Date(now.getTime() - index * 6 * 60 * 60 * 1000),
+      interviewPace: index % 4 === 0 ? "casual" : "active",
       isTestUser: true,
       createdAt: now,
       updatedAt: now,

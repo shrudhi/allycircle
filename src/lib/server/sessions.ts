@@ -11,9 +11,11 @@ import {
   notifications,
   practiceSessions,
   profiles,
+  superLikes,
 } from "@/lib/db/schema";
 import {
   attendanceOutcome,
+  interviewerIdsForCompletedSession,
   isJoinWindowOpen,
   rangesOverlap,
   sessionDurationMinutes,
@@ -165,6 +167,14 @@ export async function getSessionDetail(sessionId: string) {
   const people = await db.select().from(profiles);
   const otherId = session.requesterId === current.id ? session.receiverId : session.requesterId;
   const joinOpen = isJoinWindowOpen({ startUtc: session.startUtc, endUtc: session.endUtc, now });
+  const likes = await db.select().from(superLikes).where(eq(superLikes.sessionId, sessionId));
+  const alreadySuperLiked = likes.some((row) => row.fromUserId === current.id);
+  const interviewers = interviewerIdsForCompletedSession({
+    format: session.format as RequestFormat,
+    interviewerId: session.interviewerId,
+    requesterId: session.requesterId,
+    receiverId: session.receiverId,
+  });
   return {
     session,
     otherName: people.find((profile) => profile.userId === otherId)?.fullName || "Ally",
@@ -179,6 +189,8 @@ export async function getSessionDetail(sessionId: string) {
       session.pendingRescheduleStartUtc && session.pendingRescheduleBy && session.pendingRescheduleBy !== current.id
     ),
     canProposeReschedule: session.state === "scheduled" && session.startUtc.getTime() > now.getTime(),
+    canSuperLike: session.state === "completed" && interviewers.includes(current.id) && !alreadySuperLiked,
+    alreadySuperLiked,
   };
 }
 
@@ -372,6 +384,47 @@ export async function cancelSession(sessionId: string) {
     href: "/practice",
   });
   await track(analyticsEvents.session_cancelled, { userId: current.id });
+}
+
+export async function superLikeAlly(sessionId: string) {
+  const current = await requireMarketplaceUser();
+  const db = await getDb();
+  const now = await getNow();
+  const [session] = await db.select().from(practiceSessions).where(eq(practiceSessions.id, sessionId));
+  if (!session || session.state !== "completed") {
+    throw new Error("You can highlight a profile after you both confirm the session happened.");
+  }
+  if (session.requesterId !== current.id && session.receiverId !== current.id) {
+    throw new Error("You don’t have access to this session.");
+  }
+  const interviewers = interviewerIdsForCompletedSession({
+    format: session.format as RequestFormat,
+    interviewerId: session.interviewerId,
+    requesterId: session.requesterId,
+    receiverId: session.receiverId,
+  });
+  if (!interviewers.includes(current.id)) {
+    throw new Error("Only the person who ran the interview can highlight this profile.");
+  }
+  const toUserId = session.requesterId === current.id ? session.receiverId : session.requesterId;
+  await db
+    .insert(superLikes)
+    .values({
+      id: nanoid(),
+      sessionId,
+      fromUserId: current.id,
+      toUserId,
+      createdAt: now,
+    })
+    .onConflictDoNothing();
+  await notify({
+    userId: toUserId,
+    type: "super_like",
+    title: `${current.profile.fullName} highlighted your profile`,
+    body: "They marked you as someone they’d gladly practice with again. You can show this on your profile.",
+    href: "/record",
+  });
+  await track(analyticsEvents.super_like_given, { userId: current.id });
 }
 
 export async function listNotifications() {

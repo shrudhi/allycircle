@@ -25,6 +25,7 @@ export default async function AllyProfilePage({ params }: { params: Promise<{ id
             <p className="text-xs uppercase tracking-[0.16em] text-[#d4af37]">{data.fieldLabel}</p>
             <h1 className="mt-2 text-3xl font-semibold">{ally.fullName}</h1>
             <p className="mt-2 text-[#a0a0a0]">{[ally.currentTitle, ally.currentCompany].filter(Boolean).join(" · ")}</p>
+            <p className="mt-2 text-sm text-[#d4af37]">{data.interviewPace}</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -43,6 +44,11 @@ export default async function AllyProfilePage({ params }: { params: Promise<{ id
         <p className="mt-4 text-sm text-[#a0a0a0]">This ally is taking a break from new requests.</p>
       ) : null}
       {data.helpedCopy ? <p className="mt-4 text-sm text-[#d4af37]">{data.helpedCopy}</p> : null}
+      {data.superLikeCount ? (
+        <p className="mt-2 text-sm text-[#d4af37]">
+          Highlighted {data.superLikeCount === 1 ? "once" : `${data.superLikeCount} times`} by interviewers after a session
+        </p>
+      ) : null}
       <div className="mt-8 grid gap-6 md:grid-cols-3">
         <section className="md:col-span-2 space-y-6">
           <div className="rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-5">
@@ -61,16 +67,16 @@ export default async function AllyProfilePage({ params }: { params: Promise<{ id
           ) : null}
           {data.topics.length ? (
             <div className="rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-5">
-              <h2 className="font-medium">Can interview on</h2>
+              <h2 className="font-medium">Can interview you on</h2>
               <p className="mt-3 text-sm text-[#a0a0a0]">{data.topics.join(" · ")}</p>
             </div>
           ) : null}
           {data.employment.length ? (
             <div className="rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-5">
-              <h2 className="font-medium">Employment</h2>
+              <h2 className="font-medium">Companies</h2>
               {data.employment.map((job) => (
                 <p key={job.id} className="mt-2 text-sm text-[#a0a0a0]">
-                  {job.title} {job.company}
+                  {[job.title, job.company, job.year].filter(Boolean).join(" · ")}
                 </p>
               ))}
             </div>
@@ -82,6 +88,7 @@ export default async function AllyProfilePage({ params }: { params: Promise<{ id
                 <p key={item.id} className="mt-2 text-sm text-[#a0a0a0]">
                   {item.school}
                   {item.degree ? ` · ${item.degree}` : ""}
+                  {item.course ? ` · ${item.course}` : ""}
                 </p>
               ))}
             </div>

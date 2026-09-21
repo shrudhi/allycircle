@@ -6,6 +6,7 @@ import { getRequestDetail, listSlotsForAlly } from "@/lib/server/requests";
 import { respondAction } from "@/app/actions/app";
 import { Button } from "@/components/ui/button";
 import { formatInTimeZone } from "@/lib/domain/timezone";
+import { formatLabel, requestStateLabel } from "@/lib/domain/copy";
 
 export default async function RequestDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const current = await getSessionUser();
@@ -19,7 +20,7 @@ export default async function RequestDetailPage({ params }: { params: Promise<{ 
       <p className="text-xs uppercase tracking-[0.16em] text-[#d4af37]">Request</p>
       <h1 className="mt-2 text-3xl font-semibold">{data.otherName}</h1>
       <p className="mt-2 text-[#a0a0a0]">
-        {data.request.format === "reciprocal_swap" ? "Reciprocal swap (60m)" : "Interview Me (30m)"} · {data.request.state.replaceAll("_", " ")}
+        {formatLabel(data.request.format, "detail")} · {requestStateLabel(data.request.state)}
       </p>
       {data.request.proposedStartUtc ? (
         <p className="mt-4">Proposed: {formatInTimeZone(data.request.proposedStartUtc, current.profile.timezone)}</p>
@@ -39,7 +40,7 @@ export default async function RequestDetailPage({ params }: { params: Promise<{ 
           <form action={respondAction}>
             <input type="hidden" name="requestId" value={id} />
             <input type="hidden" name="action" value="convert" />
-            <Button variant="outline">Interview requester only (30m)</Button>
+            <Button variant="outline">Interview them only (30 min)</Button>
           </form>
         ) : null}
         {data.isReceiver && ["pending", "alternate_time_proposed"].includes(data.request.state) ? (
