@@ -94,6 +94,8 @@ export const profiles = pgTable("profiles", {
   termsAcceptedAt: ts("terms_accepted_at"),
   lastMeaningfulAt: ts("last_meaningful_at"),
   lastVisitAt: ts("last_visit_at"),
+  availableFrom: text("available_from"),
+  availableUntil: text("available_until"),
   isTestUser: boolean("is_test_user").notNull().default(false),
   createdAt: ts("created_at").notNull(),
   updatedAt: ts("updated_at").notNull(),

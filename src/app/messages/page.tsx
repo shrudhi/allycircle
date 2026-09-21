@@ -24,7 +24,8 @@ export default async function MessagesPage({
 
   return (
     <AppShell name={current.profile.fullName}>
-      <h1 className="text-3xl font-semibold">Messages</h1>
+      <p className="text-xs uppercase tracking-[0.22em] text-[#d4af37]">Inbox</p>
+      <h1 className="mt-3 font-serif text-4xl">Messages</h1>
       <div className="mt-6 grid gap-4 md:grid-cols-[260px_1fr]">
         <aside className="space-y-2">
           {conversations.length === 0 ? <p className="text-sm text-[#a0a0a0]">No conversations yet.</p> : null}
@@ -38,7 +39,7 @@ export default async function MessagesPage({
               <p className="mt-2 text-xs text-[#a0a0a0]">{item.lastPreview}</p>
               <p className="mt-2">
                 <Link href={`/practice/with/${item.otherId}`} className="text-xs text-[#d4af37]">
-                  Open practice
+                  Open sessions
                 </Link>
               </p>
             </Link>

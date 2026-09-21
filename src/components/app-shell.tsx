@@ -16,7 +16,7 @@ import { signOutAction } from "@/app/actions/auth";
 const nav = [
   { href: "/home", label: "Home", icon: Home, badge: "none" as const },
   { href: "/allies", label: "Find People", icon: Search, badge: "none" as const },
-  { href: "/practice", label: "Practice", icon: CalendarDays, badge: "practice" as const },
+  { href: "/practice", label: "Sessions", icon: CalendarDays, badge: "practice" as const },
   { href: "/messages", label: "Messages", icon: MessageCircle, badge: "messages" as const },
 ];
 

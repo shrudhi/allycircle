@@ -37,7 +37,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.16em] text-[#d4af37]">Session</p>
-          <h1 className="mt-2 text-3xl font-semibold">{data.otherName}</h1>
+          <h1 className="mt-2 font-serif text-4xl">{data.otherName}</h1>
           <p className="mt-2 text-[#a0a0a0]">
             {formatLabel(session.format, "detail")} · {formatInTimeZone(session.startUtc, current.profile.timezone)}
           </p>

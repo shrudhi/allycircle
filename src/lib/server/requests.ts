@@ -73,7 +73,9 @@ export async function listSlotsForAlly(
     format,
     now,
     busy,
-  }).slice(0, 24);
+    availableFrom: ally.availableFrom,
+    availableUntil: ally.availableUntil,
+  }).slice(0, 72);
 }
 
 export async function createPracticeRequest(input: {

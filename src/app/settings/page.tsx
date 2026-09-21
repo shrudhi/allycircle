@@ -4,6 +4,7 @@ import { getSessionUser } from "@/lib/auth/session";
 import { mySettings } from "@/lib/server/profile";
 import {
   availabilityAction,
+  availabilityPeriodAction,
   connectCalendarAction,
   deleteAccountAction,
   disconnectCalendarAction,
@@ -22,9 +23,9 @@ export default async function SettingsPage() {
   const settings = await mySettings();
   return (
     <AppShell name={current.profile.fullName}>
-      <h1 className="text-3xl font-semibold">Profile & Settings</h1>
-      <p className="mt-2 text-sm text-[#a0a0a0]">
-        Keep this current so allies know who they’re practicing with. Testimonials and interview stats live on{" "}
+      <h1 className="font-serif text-4xl">Profile & Settings</h1>
+      <p className="mt-2 text-sm text-[#b3b3b3]">
+        Keep this current so peers know who they’re sitting across from. Testimonials and interview stats live on{" "}
         <Link href="/record" className="text-[#d4af37]">
           Your record
         </Link>
@@ -69,7 +70,7 @@ export default async function SettingsPage() {
       </div>
 
       <section id="calendar" className="mt-8 rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-6">
-        <h2 className="text-lg font-medium">Calendar connection</h2>
+        <h2 className="font-serif text-2xl">Calendar connection</h2>
         <p className="mt-2 text-sm text-[#a0a0a0]">
           Google login and Calendar are separate. Connecting Calendar lets us check when you’re busy and create the Meet invite after a session is confirmed.
         </p>
@@ -86,13 +87,23 @@ export default async function SettingsPage() {
       </section>
 
       <section className="mt-8 rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-6">
-        <h2 className="text-lg font-medium">When you’re free to practice</h2>
-        <AvailabilityEditor action={availabilityAction} removeAction={removeAvailabilityAction} windows={settings.windows} />
+        <h2 className="font-serif text-2xl">Interview availability</h2>
+        <p className="mb-4 mt-2 text-sm text-[#b3b3b3]">
+          Set the date window you want to be recommended in, then publish different hours for different weekdays. There is no single from–to range for the whole week.
+        </p>
+        <AvailabilityEditor
+          action={availabilityAction}
+          removeAction={removeAvailabilityAction}
+          periodAction={availabilityPeriodAction}
+          windows={settings.windows}
+          availableFrom={settings.profile.availableFrom}
+          availableUntil={settings.profile.availableUntil}
+        />
       </section>
 
       <section className="mt-8 rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-6">
         <h2 className="text-lg font-medium">Delete account</h2>
-        <p className="mt-2 text-sm text-[#a0a0a0]">This signs you out and removes your profile from the practice network.</p>
+        <p className="mt-2 text-sm text-[#a0a0a0]">This signs you out and removes your profile from the network.</p>
         <form action={deleteAccountAction} className="mt-4">
           <Button variant="destructive">Delete my account</Button>
         </form>

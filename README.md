@@ -1,6 +1,6 @@
 # AllyCircle
 
-Peer-practice network for professionals preparing for interviews. The MVP helps you find someone in your field, agree a time, run a 30-minute Interview Me or 60-minute reciprocal swap, then leave collaborative feedback.
+Peer interview network for professionals preparing for their next role. Find someone in your field, book from their calendar, run a 30-minute Interview Me or 60-minute two-way session, then leave collaborative feedback.
 
 ## Run locally
 
@@ -63,7 +63,7 @@ Do **not** paste secrets into chat. Put them in `.env.local` or your host’s se
 - Join Session from T-15 through end+30, server-enforced
 - Meet links may appear in Google Calendar invites once the room exists
 - Session is completed only after both people confirm it happened
-- Public signal is “Helped N peers practice”, never a star rating
+- Public signal is interviews conducted as interviewer, never a star rating
 - Block is immediate; existing sessions are not deleted
 - Account deletion lives in Settings
 - Reschedule keeps the same session until the other person accepts a new time

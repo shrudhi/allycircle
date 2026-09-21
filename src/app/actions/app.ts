@@ -6,6 +6,7 @@ import {
   saveProfileSetup,
   addAvailabilityWindows,
   removeAvailabilityWindow,
+  saveAvailabilityPeriod,
   connectMockCalendar,
   disconnectCalendar,
   submitFeedback,
@@ -169,12 +170,30 @@ export async function testimonialVisibilityAction(formData: FormData) {
 }
 
 export async function availabilityAction(formData: FormData) {
-  const days = formData.getAll("weekdays").map((value) => Number(value)).filter((value) => value >= 0 && value <= 6);
-  const startParts = String(formData.get("startTime") || "18:00").split(":");
-  const endParts = String(formData.get("endTime") || "21:00").split(":");
-  const startMinutes = Number(startParts[0] || 18) * 60 + Number(startParts[1] || 0);
-  const endMinutes = Number(endParts[0] || 21) * 60 + Number(endParts[1] || 0);
-  await addAvailabilityWindows(days.map((weekday) => ({ weekday, startMinutes, endMinutes })));
+  const weekday = Number(formData.get("weekday"));
+  if (Number.isNaN(weekday) || weekday < 0 || weekday > 6) {
+    throw new Error("Choose a day.");
+  }
+  const starts = formData.getAll("startTime").map(String);
+  const ends = formData.getAll("endTime").map(String);
+  const windows = starts.map((start, index) => {
+    const startParts = start.split(":");
+    const endParts = String(ends[index] || "").split(":");
+    return {
+      weekday,
+      startMinutes: Number(startParts[0] || 0) * 60 + Number(startParts[1] || 0),
+      endMinutes: Number(endParts[0] || 0) * 60 + Number(endParts[1] || 0),
+    };
+  });
+  await addAvailabilityWindows(windows);
+  revalidatePath("/settings");
+}
+
+export async function availabilityPeriodAction(formData: FormData) {
+  await saveAvailabilityPeriod({
+    from: String(formData.get("availableFrom") || "") || undefined,
+    until: String(formData.get("availableUntil") || "") || undefined,
+  });
   revalidatePath("/settings");
 }
 

@@ -159,6 +159,20 @@ export async function addAvailabilityWindows(windows: { weekday: number; startMi
   await markMeaningful(current.id);
 }
 
+export async function saveAvailabilityPeriod(input: { from?: string; until?: string }) {
+  const current = await requireMarketplaceUser();
+  const db = await getDb();
+  const now = await getNow();
+  await db
+    .update(profiles)
+    .set({
+      availableFrom: input.from || null,
+      availableUntil: input.until || null,
+      updatedAt: now,
+    })
+    .where(eq(profiles.userId, current.id));
+}
+
 export async function connectMockCalendar() {
   const current = await requireMarketplaceUser();
   const db = await getDb();

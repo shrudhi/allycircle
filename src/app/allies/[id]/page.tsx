@@ -25,7 +25,7 @@ export default async function AllyProfilePage({ params }: { params: Promise<{ id
           <Initials name={ally.fullName} photoPath={ally.photoPath} size="lg" />
           <div>
             <p className="text-xs uppercase tracking-[0.16em] text-[#d4af37]">{data.fieldLabel}</p>
-            <h1 className="mt-2 text-3xl font-semibold">{ally.fullName}</h1>
+            <h1 className="mt-2 font-serif text-4xl">{ally.fullName}</h1>
             {ally.currentTitle || ally.currentCompany ? (
               <p className="mt-2 text-[#a0a0a0]">{[ally.currentTitle, ally.currentCompany].filter(Boolean).join(" · ")}</p>
             ) : null}
@@ -47,7 +47,7 @@ export default async function AllyProfilePage({ params }: { params: Promise<{ id
             Message
           </Link>
           <Link href={`/allies/${id}/request`} className={cn(buttonVariants(), "gold-outline")}>
-            Request practice
+            Request session
           </Link>
           <SafetyMenu userId={id} />
         </div>
@@ -60,45 +60,41 @@ export default async function AllyProfilePage({ params }: { params: Promise<{ id
           Highlighted {data.superLikeCount === 1 ? "once" : `${data.superLikeCount} times`} by interviewers after a session
         </p>
       ) : null}
-      <div className="mt-8 grid gap-6 md:grid-cols-3">
-        <section className="md:col-span-2 space-y-6">
+      <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_280px]">
+        <section className="space-y-6">
           {data.reasons.length ? (
-            <div className="rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-5">
-              <h2 className="font-medium">Why this match</h2>
-              <p className="mt-3 text-sm text-[#a0a0a0]">{data.reasons.map((reason) => reason.label).join(" · ")}</p>
+            <div className="rounded-2xl border border-white/10 bg-[#141414] p-5">
+              <h2 className="font-serif text-xl">Why this match</h2>
+              <p className="mt-3 text-sm text-[#b3b3b3]">{data.reasons.map((reason) => reason.label).join(" · ")}</p>
             </div>
           ) : null}
           {ally.bio ? (
-            <div className="rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-5">
-              <h2 className="font-medium">About</h2>
-              <p className="mt-3 text-sm text-[#a0a0a0]">{ally.bio}</p>
+            <div className="rounded-2xl border border-white/10 bg-[#141414] p-5">
+              <h2 className="font-serif text-xl">About</h2>
+              <p className="mt-3 text-sm text-[#b3b3b3]">{ally.bio}</p>
             </div>
           ) : null}
-          <div className="rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-5">
-            <h2 className="font-medium">Experience</h2>
-            <p className="mt-3 text-sm text-[#a0a0a0]">{experienceLabel(ally.experienceYears)}</p>
-          </div>
           {data.topics.length ? (
-            <div className="rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-5">
-              <h2 className="font-medium">Interview topics</h2>
-              <p className="mt-3 text-sm text-[#a0a0a0]">{data.topics.join(" · ")}</p>
+            <div className="rounded-2xl border border-white/10 bg-[#141414] p-5">
+              <h2 className="font-serif text-xl">Interview topics</h2>
+              <p className="mt-3 text-sm text-[#b3b3b3]">{data.topics.join(" · ")}</p>
             </div>
           ) : null}
           {data.employment.length ? (
-            <div className="rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-5">
-              <h2 className="font-medium">Companies</h2>
+            <div className="rounded-2xl border border-white/10 bg-[#141414] p-5">
+              <h2 className="font-serif text-xl">Companies</h2>
               {data.employment.map((job) => (
-                <p key={job.id} className="mt-2 text-sm text-[#a0a0a0]">
+                <p key={job.id} className="mt-2 text-sm text-[#b3b3b3]">
                   {[job.title, job.company, job.year].filter(Boolean).join(" · ")}
                 </p>
               ))}
             </div>
           ) : null}
           {data.education.length ? (
-            <div className="rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-5">
-              <h2 className="font-medium">Education</h2>
+            <div className="rounded-2xl border border-white/10 bg-[#141414] p-5">
+              <h2 className="font-serif text-xl">Education</h2>
               {data.education.map((item) => (
-                <p key={item.id} className="mt-2 text-sm text-[#a0a0a0]">
+                <p key={item.id} className="mt-2 text-sm text-[#b3b3b3]">
                   {item.school}
                   {item.degree ? ` · ${item.degree}` : ""}
                   {item.course ? ` · ${item.course}` : ""}
@@ -107,16 +103,47 @@ export default async function AllyProfilePage({ params }: { params: Promise<{ id
             </div>
           ) : null}
           {data.testimonials.length ? (
-            <div className="rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-5">
-              <h2 className="font-medium">Public testimonials</h2>
+            <div className="rounded-2xl border border-white/10 bg-[#141414] p-5">
+              <h2 className="font-serif text-xl">Public testimonials</h2>
               {data.testimonials.map((item) => (
-                <p key={item.id} className="mt-3 text-sm text-[#a0a0a0]">
+                <p key={item.id} className="mt-3 text-sm text-[#b3b3b3]">
                   “{item.body}”
                 </p>
               ))}
             </div>
           ) : null}
         </section>
+        <aside className="h-fit rounded-2xl border border-white/10 bg-[#141414] p-5">
+          <h2 className="font-serif text-xl">At a glance</h2>
+          <dl className="mt-4 space-y-4 text-sm">
+            <div>
+              <dt className="text-[#8a8a8a]">Domain</dt>
+              <dd className="mt-1">{data.fieldLabel}</dd>
+            </div>
+            {ally.currentCompany ? (
+              <div>
+                <dt className="text-[#8a8a8a]">Company</dt>
+                <dd className="mt-1">{ally.currentCompany}</dd>
+              </div>
+            ) : null}
+            <div>
+              <dt className="text-[#8a8a8a]">Relevant experience</dt>
+              <dd className="mt-1">{experienceLabel(ally.experienceYears)}</dd>
+            </div>
+            {data.openToTwoWay ? (
+              <div>
+                <dt className="text-[#8a8a8a]">Open to two-way</dt>
+                <dd className="mt-1">Yes</dd>
+              </div>
+            ) : null}
+            {data.helpedCopy ? (
+              <div>
+                <dt className="text-[#8a8a8a]">Interviews conducted</dt>
+                <dd className="mt-1">{data.helpedCopy}</dd>
+              </div>
+            ) : null}
+          </dl>
+        </aside>
       </div>
     </AppShell>
   );

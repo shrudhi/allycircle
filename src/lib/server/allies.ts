@@ -31,7 +31,7 @@ import {
   interviewerIdsForCompletedSession,
   matchesExperienceBand,
 } from "@/lib/domain/scheduling";
-import { weekdayInTimeZone } from "@/lib/domain/timezone";
+import { weekdayInTimeZone, isoDateInTimeZone } from "@/lib/domain/timezone";
 import { pairAllowed } from "@/lib/server/safety";
 
 async function pastConnectionIds(userId: string) {
@@ -139,6 +139,7 @@ export async function findAllies(input: {
     if (ally.userId === current.id) continue;
     if (!ally.onboardingComplete) continue;
     if (blockedIds.has(ally.userId)) continue;
+    if (ally.availableUntil && ally.availableUntil < isoDateInTimeZone(now, ally.timezone)) continue;
     const person = {
       id: ally.userId,
       fieldId: ally.fieldId,
@@ -432,30 +433,41 @@ export async function getHomeData() {
   const allSessions = [...upcoming, ...upcomingB].filter(
     (row, index, all) => all.findIndex((item) => item.id === row.id) === index
   );
-  const sessions = allSessions
-    .filter((row) => row.state === "scheduled")
-    .filter((row) => row.endUtc.getTime() >= now.getTime())
-    .sort((a, b) => a.startUtc.getTime() - b.startUtc.getTime());
-  const next = sessions[0] || null;
   const people = await db.select().from(profiles);
-  const otherId = next
-    ? next.requesterId === current.id
-      ? next.receiverId
-      : next.requesterId
-    : null;
+  const sessions = allSessions
+    .filter((row) => row.state === "scheduled" || row.state === "awaiting_attendance")
+    .filter((row) => row.endUtc.getTime() >= now.getTime())
+    .sort((a, b) => a.startUtc.getTime() - b.startUtc.getTime())
+    .map((row) => {
+      const otherId = row.requesterId === current.id ? row.receiverId : row.requesterId;
+      return {
+        ...row,
+        otherName: people.find((item) => item.userId === otherId)?.fullName || "Ally",
+        otherId,
+      };
+    });
+  const pending = (await db.select().from(practiceRequests))
+    .filter((row) => row.requesterId === current.id || row.receiverId === current.id)
+    .filter((row) => ["pending", "alternate_time_proposed", "time_unavailable"].includes(row.state))
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .map((row) => {
+      const otherId = row.requesterId === current.id ? row.receiverId : row.requesterId;
+      return {
+        ...row,
+        otherName: people.find((item) => item.userId === otherId)?.fullName || "Ally",
+        otherId,
+        direction: row.requesterId === current.id ? "sent" : "received",
+      };
+    });
   return {
     needsOnboarding: false as const,
     name: current.profile.fullName,
     fieldLabel: fieldLabel(current.profile.fieldId, current.profile.fieldCustom),
-    nextSession: next
-      ? {
-          ...next,
-          otherName: people.find((row) => row.userId === otherId)?.fullName || "Ally",
-          otherId,
-        }
-      : null,
+    nextSession: sessions[0] || null,
+    upcomingSessions: sessions,
+    pendingRequests: pending,
     takingABreak: !current.profile.openToBeInterviewed && !current.profile.openToInterviewOthers,
-    isNew: allSessions.length === 0,
+    isNew: allSessions.length === 0 && pending.length === 0,
   };
 }
 

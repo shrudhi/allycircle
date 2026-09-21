@@ -266,6 +266,8 @@ CREATE TABLE IF NOT EXISTS conversation_reads (
   PRIMARY KEY (user_id, conversation_id)
 );
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS interview_pace text NOT NULL DEFAULT 'active';
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS available_from text;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS available_until text;
 ALTER TABLE education ADD COLUMN IF NOT EXISTS course text;
 CREATE TABLE IF NOT EXISTS super_likes (
   id text PRIMARY KEY,

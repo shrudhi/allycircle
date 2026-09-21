@@ -24,6 +24,8 @@ export function generateBookableSlots(input: {
   busy: BusyRange[];
   minNoticeHours?: number;
   horizonDays?: number;
+  availableFrom?: string | null;
+  availableUntil?: string | null;
 }) {
   const duration = sessionDurationMinutes(input.format);
   const minNotice = input.minNoticeHours ?? productConfig.minNoticeHours;
@@ -35,6 +37,8 @@ export function generateBookableSlots(input: {
   for (let cursor = new Date(input.now); cursor <= latest; cursor = addDays(cursor, 1)) {
     const weekday = weekdayInTimeZone(cursor, input.timezone);
     const date = isoDateInTimeZone(cursor, input.timezone);
+    if (input.availableFrom && date < input.availableFrom) continue;
+    if (input.availableUntil && date > input.availableUntil) continue;
     const [year, month, day] = date.split("-").map(Number);
     for (const window of input.windows.filter((item) => item.weekday === weekday)) {
       for (let startMin = window.startMinutes; startMin + duration <= window.endMinutes; startMin += 30) {

@@ -17,7 +17,8 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
 
   return (
     <AppShell name={current.profile.fullName}>
-      <h1 className="text-3xl font-semibold">Request practice with {data.ally.fullName}</h1>
+      <p className="text-xs uppercase tracking-[0.22em] text-[#d4af37]">Book a slot</p>
+      <h1 className="mt-3 font-serif text-4xl">Request a session with {data.ally.fullName}</h1>
       <p className="mt-2 text-sm text-[#a0a0a0]">
         They interview you for 30 minutes. Pick a date and time from their availability. Two-way is optional and only starts if you both agree.
       </p>

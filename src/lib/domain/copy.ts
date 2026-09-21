@@ -46,7 +46,7 @@ export function sessionStateLabel(state: string) {
     awaiting_attendance: "Did you meet?",
     completed: "Completed",
     cancelled: "Cancelled",
-    did_not_happen: "Didn’t happen",
+    did_not_happen: "Time over",
   };
   return labels[state] || state.replaceAll("_", " ");
 }
