@@ -78,7 +78,13 @@ function createAuth(db: Awaited<ReturnType<typeof getDb>>) {
           },
         },
         plugins: [nextCookies()],
-    trustedOrigins: [origin(), "http://localhost:43131", "http://127.0.0.1:43131"],
+    trustedOrigins: [
+      origin(),
+      "http://localhost:43131",
+      "http://127.0.0.1:43131",
+      "http://0.0.0.0:43131",
+      "http://172.30.0.2:43131",
+    ],
   });
 }
 
