@@ -256,6 +256,15 @@ CREATE TABLE IF NOT EXISTS time_overrides (
 );
 ALTER TABLE practice_sessions ADD COLUMN IF NOT EXISTS pending_reschedule_start_utc timestamptz;
 ALTER TABLE practice_sessions ADD COLUMN IF NOT EXISTS pending_reschedule_by text;
+ALTER TABLE practice_sessions ADD COLUMN IF NOT EXISTS pending_two_way_by text;
+ALTER TABLE practice_requests ADD COLUMN IF NOT EXISTS open_to_two_way boolean NOT NULL DEFAULT false;
+ALTER TABLE practice_requests ADD COLUMN IF NOT EXISTS pending_two_way_by text;
+CREATE TABLE IF NOT EXISTS conversation_reads (
+  user_id text NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+  conversation_id text NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  last_read_at timestamptz NOT NULL,
+  PRIMARY KEY (user_id, conversation_id)
+);
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS interview_pace text NOT NULL DEFAULT 'active';
 ALTER TABLE education ADD COLUMN IF NOT EXISTS course text;
 CREATE TABLE IF NOT EXISTS super_likes (

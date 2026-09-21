@@ -48,8 +48,41 @@ export function interviewerIdsForCompletedSession(input: {
   return input.interviewerId ? [input.interviewerId] : [input.receiverId];
 }
 
-export function helpedPeersCopy(count: number) {
+export function interviewsConductedCopy(count: number) {
   if (count <= 0) return null;
-  if (count === 1) return "Helped 1 peer practice";
-  return `Helped ${count} peers practice`;
+  if (count === 1) return "1 interview conducted";
+  return `${count} interviews conducted`;
+}
+
+export function helpedPeersCopy(count: number) {
+  return interviewsConductedCopy(count);
+}
+
+export function twoWayEndFromStart(startUtc: Date) {
+  return new Date(startUtc.getTime() + productConfig.reciprocalSwapMinutes * 60 * 1000);
+}
+
+export function activityLabel(lastMeaningfulAt: Date | null, now: Date) {
+  if (!lastMeaningfulAt) return null;
+  const days = (now.getTime() - lastMeaningfulAt.getTime()) / (24 * 60 * 60 * 1000);
+  if (days <= productConfig.activityBuckets.thisWeekDays) return "Active this week";
+  if (days <= productConfig.activityBuckets.thisMonthDays) return "Active this month";
+  if (days <= 90) return "Recently active";
+  return null;
+}
+
+export const experienceBands = [
+  { value: "0-2", label: "0–2 years" },
+  { value: "3-5", label: "3–5 years" },
+  { value: "6-8", label: "6–8 years" },
+  { value: "9+", label: "9+ years" },
+] as const;
+
+export function matchesExperienceBand(years: number, band?: string | null) {
+  if (!band) return true;
+  if (band === "0-2") return years >= 0 && years <= 2;
+  if (band === "3-5") return years >= 3 && years <= 5;
+  if (band === "6-8") return years >= 6 && years <= 8;
+  if (band === "9+") return years >= 9;
+  return true;
 }

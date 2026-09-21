@@ -22,9 +22,9 @@ export default async function RecordPage() {
       </p>
       <div className="mt-8 grid gap-4 sm:grid-cols-3">
         <div className="rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-5">
-          <p className="text-sm text-[#a0a0a0]">Interviews you’ve given</p>
+          <p className="text-sm text-[#a0a0a0]">Interviews conducted</p>
           <p className="mt-2 text-3xl font-semibold">{data.interviewsGiven}</p>
-          <p className="mt-2 text-sm text-[#d4af37]">{helpedPeersCopy(data.interviewsGiven) || "Give your first mock to start this."}</p>
+          <p className="mt-2 text-sm text-[#d4af37]">{helpedPeersCopy(data.interviewsGiven) || "Conduct your first mock to start this."}</p>
         </div>
         <div className="rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-5">
           <p className="text-sm text-[#a0a0a0]">Waiting on a reply</p>
@@ -79,7 +79,7 @@ export default async function RecordPage() {
             <p className="text-[#a0a0a0]">“{item.body}”</p>
             <label className="flex items-center gap-2">
               <input type="checkbox" name="visible" defaultChecked={item.recipientVisible} />
-              Show on profile
+              Show publicly on my profile
             </label>
             <Button variant="outline" size="sm">Save</Button>
           </form>

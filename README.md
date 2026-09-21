@@ -34,7 +34,7 @@ Development seeds labelled test allies (not mixed into production). Password for
 
 Example: `avery.chen@test.allycircle.local`
 
-Sign up with your own email to practice the real onboarding flow, then Find an Ally will show the test professionals in Product Management and other fields.
+Sign up with your own email to practice the real onboarding flow, then Find People will show the test professionals in Product Management and other fields.
 
 Development-only tools:
 

@@ -23,12 +23,13 @@ import {
   proposeReschedule,
   respondToReschedule,
   superLikeAlly,
+  proposeSessionTwoWay,
+  respondSessionTwoWay,
 } from "@/lib/server/sessions";
 import { blockUser, reportUser } from "@/lib/server/moderation";
 import { saveProfilePhoto } from "@/lib/server/photos";
 import { requireSessionUser } from "@/lib/auth/session";
 import { setNowOverride } from "@/lib/db";
-import type { RequestFormat } from "@/lib/domain/types";
 import type { ReportReason } from "@/lib/domain/types";
 
 export async function saveProfileAction(formData: FormData) {
@@ -84,9 +85,9 @@ export async function toggleSaveAction(allyId: string) {
 export async function sendRequestAction(formData: FormData) {
   const result = await createPracticeRequest({
     allyId: String(formData.get("allyId")),
-    format: String(formData.get("format")) as RequestFormat,
     message: String(formData.get("message") || ""),
     startIso: String(formData.get("startIso") || "") || undefined,
+    openToTwoWay: formData.get("openToTwoWay") === "on",
   });
   redirect(`/practice/requests/${result.id}`);
 }
@@ -94,8 +95,16 @@ export async function sendRequestAction(formData: FormData) {
 export async function respondAction(formData: FormData) {
   const result = await respondToRequest({
     requestId: String(formData.get("requestId")),
-    action: String(formData.get("action")) as "accept" | "convert" | "decline" | "cancel" | "propose",
+    action: String(formData.get("action")) as
+      | "accept"
+      | "convert"
+      | "decline"
+      | "cancel"
+      | "propose"
+      | "propose_two_way"
+      | "confirm_two_way",
     startIso: String(formData.get("startIso") || "") || undefined,
+    acceptAsTwoWay: formData.get("acceptAsTwoWay") === "on",
   });
   if (result.ok && "sessionId" in result && result.sessionId) {
     redirect(`/practice/sessions/${result.sessionId}`);
@@ -222,6 +231,19 @@ export async function deleteAccountAction() {
 export async function markReadAction() {
   await markNotificationsRead();
   revalidatePath("/notifications");
+}
+
+export async function respondSessionTwoWayAction(formData: FormData) {
+  await respondSessionTwoWay(
+    String(formData.get("sessionId")),
+    String(formData.get("action")) as "accept" | "decline"
+  );
+  revalidatePath(`/practice/sessions/${String(formData.get("sessionId"))}`);
+}
+
+export async function proposeSessionTwoWayAction(formData: FormData) {
+  await proposeSessionTwoWay(String(formData.get("sessionId")));
+  revalidatePath(`/practice/sessions/${String(formData.get("sessionId"))}`);
 }
 
 export async function superLikeAction(formData: FormData) {

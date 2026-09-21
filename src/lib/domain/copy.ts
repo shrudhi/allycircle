@@ -14,16 +14,16 @@ export function interviewPaceLabel(pace?: string | null) {
 
 export function formatLabel(format: string, style: "short" | "detail" = "short") {
   if (format === "reciprocal_swap") {
-    return style === "detail" ? "You take turns (60 min)" : "You take turns";
+    return style === "detail" ? "Two-way (60 min)" : "Two-way";
   }
-  return style === "detail" ? "They interview you (30 min)" : "They interview you";
+  return style === "detail" ? "Interview Me (30 min)" : "Interview Me";
 }
 
 export function formatHint(format: RequestFormat) {
   if (format === "reciprocal_swap") {
-    return "You each interview the other for about 30 minutes. Best when you can both give a useful mock.";
+    return "You each interview the other for 30 minutes after both of you agree.";
   }
-  return "They run a 30-minute mock so you can practice answering. Simple and focused.";
+  return "They interview you for 30 minutes.";
 }
 
 export function requestStateLabel(state: string) {

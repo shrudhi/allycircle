@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ExternalLink } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { getSessionUser } from "@/lib/auth/session";
 import { getAllyProfile } from "@/lib/server/allies";
-import { blockAction, reportAction, toggleSaveAction } from "@/app/actions/app";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Initials } from "@/components/initials";
-import { reportReasonLabels } from "@/lib/domain/types";
+import { BookmarkButton } from "@/components/bookmark-button";
+import { SafetyMenu } from "@/components/safety-menu";
+import { experienceLabel } from "@/lib/domain/types";
 
 export default async function AllyProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const current = await getSessionUser();
@@ -24,50 +26,61 @@ export default async function AllyProfilePage({ params }: { params: Promise<{ id
           <div>
             <p className="text-xs uppercase tracking-[0.16em] text-[#d4af37]">{data.fieldLabel}</p>
             <h1 className="mt-2 text-3xl font-semibold">{ally.fullName}</h1>
-            <p className="mt-2 text-[#a0a0a0]">{[ally.currentTitle, ally.currentCompany].filter(Boolean).join(" · ")}</p>
-            <p className="mt-2 text-sm text-[#d4af37]">{data.interviewPace}</p>
+            {ally.currentTitle || ally.currentCompany ? (
+              <p className="mt-2 text-[#a0a0a0]">{[ally.currentTitle, ally.currentCompany].filter(Boolean).join(" · ")}</p>
+            ) : null}
+            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              {data.activity ? <span className="rounded-full border border-[#2d2d2d] px-2 py-0.5 text-[#d4af37]">{data.activity}</span> : null}
+              {data.openToTwoWay ? <span className="rounded-full border border-[#d4af37]/40 px-2 py-0.5 text-[#d4af37]">Open to 2-way</span> : null}
+              {data.helpedCopy ? <span className="rounded-full border border-[#2d2d2d] px-2 py-0.5">{data.helpedCopy}</span> : null}
+            </div>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <form action={toggleSaveAction.bind(null, id)}>
-            <button className={cn(buttonVariants({ variant: "outline" }))}>{data.saved ? "Saved" : "Save"}</button>
-          </form>
+        <div className="flex flex-wrap items-center gap-2">
+          <BookmarkButton allyId={id} saved={data.saved} />
+          {ally.linkedinUrl ? (
+            <a href={ally.linkedinUrl} target="_blank" rel="noreferrer" className="rounded-lg p-2 text-[#a0a0a0]" aria-label="LinkedIn">
+              <ExternalLink className="size-4" />
+            </a>
+          ) : null}
           <Link href={`/messages?to=${id}`} className={cn(buttonVariants({ variant: "outline" }))}>
             Message
           </Link>
           <Link href={`/allies/${id}/request`} className={cn(buttonVariants(), "gold-outline")}>
             Request practice
           </Link>
+          <SafetyMenu userId={id} />
         </div>
       </div>
       {data.takingABreak ? (
         <p className="mt-4 text-sm text-[#a0a0a0]">This ally is taking a break from new requests.</p>
       ) : null}
-      {data.helpedCopy ? <p className="mt-4 text-sm text-[#d4af37]">{data.helpedCopy}</p> : null}
       {data.superLikeCount ? (
-        <p className="mt-2 text-sm text-[#d4af37]">
+        <p className="mt-4 text-sm text-[#d4af37]">
           Highlighted {data.superLikeCount === 1 ? "once" : `${data.superLikeCount} times`} by interviewers after a session
         </p>
       ) : null}
       <div className="mt-8 grid gap-6 md:grid-cols-3">
         <section className="md:col-span-2 space-y-6">
-          <div className="rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-5">
-            <h2 className="font-medium">Why this is a great match</h2>
-            <ul className="mt-3 space-y-1 text-sm text-[#a0a0a0]">
-              {data.reasons.map((reason) => (
-                <li key={reason.code}>{reason.label}</li>
-              ))}
-            </ul>
-          </div>
+          {data.reasons.length ? (
+            <div className="rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-5">
+              <h2 className="font-medium">Why this match</h2>
+              <p className="mt-3 text-sm text-[#a0a0a0]">{data.reasons.map((reason) => reason.label).join(" · ")}</p>
+            </div>
+          ) : null}
           {ally.bio ? (
             <div className="rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-5">
               <h2 className="font-medium">About</h2>
               <p className="mt-3 text-sm text-[#a0a0a0]">{ally.bio}</p>
             </div>
           ) : null}
+          <div className="rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-5">
+            <h2 className="font-medium">Experience</h2>
+            <p className="mt-3 text-sm text-[#a0a0a0]">{experienceLabel(ally.experienceYears)}</p>
+          </div>
           {data.topics.length ? (
             <div className="rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-5">
-              <h2 className="font-medium">Can interview you on</h2>
+              <h2 className="font-medium">Interview topics</h2>
               <p className="mt-3 text-sm text-[#a0a0a0]">{data.topics.join(" · ")}</p>
             </div>
           ) : null}
@@ -95,7 +108,7 @@ export default async function AllyProfilePage({ params }: { params: Promise<{ id
           ) : null}
           {data.testimonials.length ? (
             <div className="rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-5">
-              <h2 className="font-medium">From other allies</h2>
+              <h2 className="font-medium">Public testimonials</h2>
               {data.testimonials.map((item) => (
                 <p key={item.id} className="mt-3 text-sm text-[#a0a0a0]">
                   “{item.body}”
@@ -104,31 +117,6 @@ export default async function AllyProfilePage({ params }: { params: Promise<{ id
             </div>
           ) : null}
         </section>
-        <aside className="space-y-4">
-          {ally.linkedinUrl ? (
-            <a href={ally.linkedinUrl} className="block text-sm text-[#d4af37]" target="_blank" rel="noreferrer">
-              View LinkedIn
-            </a>
-          ) : null}
-          <form action={blockAction} className="rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-4 text-sm">
-            <input type="hidden" name="userId" value={id} />
-            <p className="mb-2 text-[#a0a0a0]">Need space from this person?</p>
-            <button className="text-[#e07070]">Block</button>
-          </form>
-          <form action={reportAction} className="rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-4 space-y-2 text-sm">
-            <input type="hidden" name="userId" value={id} />
-            <p>Report</p>
-            <select name="reason" className="h-8 w-full rounded-lg border border-[#2d2d2d] bg-[#111] px-2">
-              {Object.entries(reportReasonLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-            <textarea name="description" className="min-h-20 w-full rounded-lg border border-[#2d2d2d] bg-[#111] p-2" placeholder="Optional details" />
-            <button className="text-[#d4af37]">Submit report</button>
-          </form>
-        </aside>
       </div>
     </AppShell>
   );

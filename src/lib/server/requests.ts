@@ -78,9 +78,10 @@ export async function listSlotsForAlly(
 
 export async function createPracticeRequest(input: {
   allyId: string;
-  format: RequestFormat;
+  format?: RequestFormat;
   message?: string;
   startIso?: string;
+  openToTwoWay?: boolean;
 }) {
   const current = await requireMarketplaceUser();
   const { receiver, requesterPerson, receiverPerson, allowed } = await eligibilityPair(
@@ -90,26 +91,27 @@ export async function createPracticeRequest(input: {
   if (!canInterview(receiverPerson, requesterPerson, allowed)) {
     throw new Error("This ally is taking a break from new requests.");
   }
-  if (input.format === "reciprocal_swap" && !canOfferReciprocalSwap(requesterPerson, receiverPerson, allowed)) {
-    throw new Error("A reciprocal swap isn’t available with this ally.");
-  }
+  const openToTwoWay =
+    Boolean(input.openToTwoWay) && canOfferReciprocalSwap(requesterPerson, receiverPerson, allowed);
   const db = await getDb();
   const now = await getNow();
+  const format: RequestFormat = "interview_me";
   let proposedStartUtc = input.startIso ? new Date(input.startIso) : null;
   let proposedEndUtc = proposedStartUtc
-    ? new Date(proposedStartUtc.getTime() + sessionDurationMinutes(input.format) * 60 * 1000)
+    ? new Date(proposedStartUtc.getTime() + sessionDurationMinutes(format) * 60 * 1000)
     : null;
   const id = nanoid();
   await db.insert(practiceRequests).values({
     id,
     requesterId: current.id,
     receiverId: input.allyId,
-    format: input.format,
+    format,
     state: "pending",
     message: input.message || null,
     proposedStartUtc,
     proposedEndUtc,
     expiresAt: requestExpiryAt({ createdAt: now, proposedStartUtc }),
+    openToTwoWay,
     createdAt: now,
     updatedAt: now,
   });
@@ -125,10 +127,9 @@ export async function createPracticeRequest(input: {
     userId: input.allyId,
     type: "new_request",
     title: `${current.profile.fullName} sent a practice request`,
-    body:
-      input.format === "reciprocal_swap"
-        ? "They’d like a 60-minute reciprocal swap."
-        : "They’d like you to interview them for 30 minutes.",
+    body: openToTwoWay
+      ? "They’d like you to interview them for 30 minutes, and they’re open to interviewing you too if you want a two-way session."
+      : "They’d like you to interview them for 30 minutes.",
     href: `/practice/requests/${id}`,
     email: receiverUser
       ? { to: receiverUser.email, subject: "You have a new AllyCircle practice request" }
@@ -137,7 +138,7 @@ export async function createPracticeRequest(input: {
   await markMeaningful(current.id);
   await track(analyticsEvents.request_created, {
     userId: current.id,
-    properties: { format: input.format, hasTime: Boolean(proposedStartUtc) },
+    properties: { format, hasTime: Boolean(proposedStartUtc), openToTwoWay },
   });
   return { id };
 }
@@ -157,8 +158,9 @@ async function loadRequestForParticipant(requestId: string, userId: string) {
 
 export async function respondToRequest(input: {
   requestId: string;
-  action: "accept" | "convert" | "decline" | "cancel" | "propose";
+  action: "accept" | "convert" | "decline" | "cancel" | "propose" | "propose_two_way" | "confirm_two_way";
   startIso?: string;
+  acceptAsTwoWay?: boolean;
 }) {
   const current = await requireMarketplaceUser();
   const db = await getDb();
@@ -228,6 +230,62 @@ export async function respondToRequest(input: {
     return { ok: true as const, state: "alternate_time_proposed" };
   }
 
+  if (input.action === "propose_two_way") {
+    if (request.receiverId !== current.id) throw new Error("Only the person being asked to interview can propose two-way.");
+    if (!["pending", "alternate_time_proposed"].includes(request.state)) {
+      throw new Error("This request can’t be changed to two-way right now.");
+    }
+    await db
+      .update(practiceRequests)
+      .set({ pendingTwoWayBy: current.id, updatedAt: now })
+      .where(eq(practiceRequests.id, request.id));
+    await db.insert(requestEvents).values({
+      id: nanoid(),
+      requestId: request.id,
+      actorId: current.id,
+      fromState: request.state,
+      toState: request.state,
+      note: "proposed_two_way",
+      createdAt: now,
+    });
+    await notify({
+      userId: request.requesterId,
+      type: "two_way_proposed",
+      title: `${current.profile.fullName} suggested two-way practice`,
+      body: "They can still interview you for 30 minutes. Confirm if you’d also interview them for the extra 30 minutes.",
+      href: `/practice/requests/${request.id}`,
+    });
+    return { ok: true as const, state: request.state };
+  }
+
+  if (input.action === "confirm_two_way") {
+    if (request.requesterId !== current.id) throw new Error("Only the original requester can confirm two-way from this request.");
+    if (!request.pendingTwoWayBy || request.pendingTwoWayBy === current.id) {
+      throw new Error("There’s no two-way proposal waiting.");
+    }
+    await db
+      .update(practiceRequests)
+      .set({ openToTwoWay: true, pendingTwoWayBy: null, updatedAt: now })
+      .where(eq(practiceRequests.id, request.id));
+    await db.insert(requestEvents).values({
+      id: nanoid(),
+      requestId: request.id,
+      actorId: current.id,
+      fromState: request.state,
+      toState: request.state,
+      note: "confirmed_two_way_interest",
+      createdAt: now,
+    });
+    await notify({
+      userId: request.receiverId,
+      type: "two_way_agreed",
+      title: `${current.profile.fullName} is open to two-way practice`,
+      body: "You can accept as a 60-minute two-way session if the time still works.",
+      href: `/practice/requests/${request.id}`,
+    });
+    return { ok: true as const, state: request.state };
+  }
+
   if (input.action === "accept" || input.action === "convert") {
     if (request.receiverId !== current.id && request.state !== "alternate_time_proposed") {
       if (request.requesterId !== current.id) throw new Error("You can’t confirm this request.");
@@ -244,6 +302,13 @@ export async function respondToRequest(input: {
       end = times.endUtc;
       format = "interview_me";
       state = "converted_to_one_way";
+    }
+    if (input.action === "accept" && input.acceptAsTwoWay) {
+      if (!request.openToTwoWay) {
+        throw new Error("Both of you need to agree before this becomes a two-way session.");
+      }
+      format = "reciprocal_swap";
+      end = new Date(start.getTime() + sessionDurationMinutes(format) * 60 * 1000);
     }
 
     const busy = [
@@ -373,11 +438,13 @@ export async function getRequestDetail(requestId: string) {
   const db = await getDb();
   const otherId = request.requesterId === current.id ? request.receiverId : request.requesterId;
   const [other] = await db.select().from(profiles).where(eq(profiles.userId, otherId));
+  const events = await db.select().from(requestEvents).where(eq(requestEvents.requestId, requestId));
   return {
     request,
     otherName: other?.fullName || "Ally",
     otherId,
     isReceiver: request.receiverId === current.id,
+    events: events.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()),
   };
 }
 

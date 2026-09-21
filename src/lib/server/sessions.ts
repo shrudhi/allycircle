@@ -7,11 +7,16 @@ import { productConfig } from "@/lib/config/product";
 import { getDb, getNow } from "@/lib/db";
 import {
   conversations,
+  conversationReads,
   messages,
   notifications,
   practiceSessions,
   profiles,
   superLikes,
+  feedback,
+  testimonials,
+  requestEvents,
+  practiceRequests,
 } from "@/lib/db/schema";
 import {
   attendanceOutcome,
@@ -19,6 +24,7 @@ import {
   isJoinWindowOpen,
   rangesOverlap,
   sessionDurationMinutes,
+  twoWayEndFromStart,
 } from "@/lib/domain/scheduling";
 import type { RequestFormat } from "@/lib/domain/types";
 import { enqueueJob, processJobs, scheduleSessionReminders } from "@/lib/server/jobs";
@@ -94,14 +100,29 @@ export async function listConversations() {
     .from(conversations)
     .where(or(eq(conversations.userLowId, current.id), eq(conversations.userHighId, current.id))!);
   const people = await db.select().from(profiles);
+  const reads = await db.select().from(conversationReads).where(eq(conversationReads.userId, current.id));
+  const readMap = new Map(reads.map((row) => [row.conversationId, row.lastReadAt]));
+  const allMessages = await db.select().from(messages);
   return rows
     .sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime())
     .map((row) => {
       const otherId = row.userLowId === current.id ? row.userHighId : row.userLowId;
+      const lastRead = readMap.get(row.id);
+      const unread = allMessages.some(
+        (message) =>
+          message.conversationId === row.id &&
+          message.senderId !== current.id &&
+          (!lastRead || message.createdAt.getTime() > lastRead.getTime())
+      );
+      const last = allMessages
+        .filter((message) => message.conversationId === row.id)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
       return {
         ...row,
         otherId,
         otherName: people.find((profile) => profile.userId === otherId)?.fullName || "Ally",
+        unread,
+        lastPreview: last?.body || "",
       };
     });
 }
@@ -124,6 +145,14 @@ export async function listMessages(conversationId: string) {
     .from(messages)
     .where(eq(messages.conversationId, conversationId))
     .orderBy(messages.createdAt);
+  const now = await getNow();
+  await db
+    .insert(conversationReads)
+    .values({ userId: current.id, conversationId, lastReadAt: now })
+    .onConflictDoUpdate({
+      target: [conversationReads.userId, conversationReads.conversationId],
+      set: { lastReadAt: now },
+    });
   return {
     conversationId,
     otherId,
@@ -191,6 +220,10 @@ export async function getSessionDetail(sessionId: string) {
     canProposeReschedule: session.state === "scheduled" && session.startUtc.getTime() > now.getTime(),
     canSuperLike: session.state === "completed" && interviewers.includes(current.id) && !alreadySuperLiked,
     alreadySuperLiked,
+    pendingTwoWay: Boolean(session.pendingTwoWayBy),
+    iProposedTwoWay: session.pendingTwoWayBy === current.id,
+    canRespondToTwoWay: Boolean(session.pendingTwoWayBy && session.pendingTwoWayBy !== current.id && session.state === "scheduled" && session.format === "interview_me"),
+    canProposeTwoWay: session.state === "scheduled" && session.format === "interview_me" && !session.pendingTwoWayBy,
   };
 }
 
@@ -425,6 +458,139 @@ export async function superLikeAlly(sessionId: string) {
     href: "/record",
   });
   await track(analyticsEvents.super_like_given, { userId: current.id });
+}
+
+export async function proposeSessionTwoWay(sessionId: string) {
+  const current = await requireMarketplaceUser();
+  const db = await getDb();
+  const now = await getNow();
+  const [session] = await db.select().from(practiceSessions).where(eq(practiceSessions.id, sessionId));
+  if (!session || (session.requesterId !== current.id && session.receiverId !== current.id)) {
+    throw new Error("You don’t have access to this session.");
+  }
+  if (session.state !== "scheduled" || session.format !== "interview_me") {
+    throw new Error("Two-way can only be added to a confirmed 30-minute Interview Me session.");
+  }
+  await db
+    .update(practiceSessions)
+    .set({ pendingTwoWayBy: current.id, updatedAt: now })
+    .where(eq(practiceSessions.id, sessionId));
+  const other = session.requesterId === current.id ? session.receiverId : session.requesterId;
+  await notify({
+    userId: other,
+    type: "two_way_proposed",
+    title: `${current.profile.fullName} suggested adding a two-way segment`,
+    body: "The original 30 minutes stay. Confirm if you also want the extra 30 minutes after, so you take turns.",
+    href: `/practice/sessions/${sessionId}`,
+  });
+}
+
+export async function respondSessionTwoWay(sessionId: string, action: "accept" | "decline") {
+  const current = await requireMarketplaceUser();
+  const db = await getDb();
+  const now = await getNow();
+  const [session] = await db.select().from(practiceSessions).where(eq(practiceSessions.id, sessionId));
+  if (!session || (session.requesterId !== current.id && session.receiverId !== current.id)) {
+    throw new Error("You don’t have access to this session.");
+  }
+  if (!session.pendingTwoWayBy || session.pendingTwoWayBy === current.id) {
+    throw new Error("There’s no two-way proposal waiting for you.");
+  }
+  const other = session.pendingTwoWayBy;
+  if (action === "decline") {
+    await db
+      .update(practiceSessions)
+      .set({ pendingTwoWayBy: null, updatedAt: now })
+      .where(eq(practiceSessions.id, sessionId));
+    await notify({
+      userId: other,
+      type: "two_way_declined",
+      title: "Your ally kept this as a 30-minute Interview Me",
+      body: "The original time is unchanged.",
+      href: `/practice/sessions/${sessionId}`,
+    });
+    return;
+  }
+  const end = twoWayEndFromStart(session.startUtc);
+  await assertSessionTimeFree(session.requesterId, session.receiverId, session.endUtc, end, session.id);
+  await db
+    .update(practiceSessions)
+    .set({
+      format: "reciprocal_swap",
+      endUtc: end,
+      pendingTwoWayBy: null,
+      updatedAt: now,
+    })
+    .where(eq(practiceSessions.id, sessionId));
+  await scheduleSessionReminders(sessionId, session.startUtc, end);
+  if (session.meetProvisionState !== "ready") {
+    await enqueueJob("provision_meet", now, `meet:${sessionId}:twoway`, { sessionId });
+    await processJobs();
+  }
+  for (const userId of [session.requesterId, session.receiverId]) {
+    await notify({
+      userId,
+      type: "two_way_confirmed",
+      title: "This is now a 60-minute two-way session",
+      body: "First 30 minutes: they interview you. Second 30 minutes: you interview them. Same meeting link.",
+      href: `/practice/sessions/${sessionId}`,
+    });
+  }
+}
+
+export async function getInteraction(otherId: string) {
+  const current = await requireMarketplaceUser();
+  const db = await getDb();
+  const now = await getNow();
+  const [other] = await db.select().from(profiles).where(eq(profiles.userId, otherId));
+  if (!other) throw new Error("We couldn’t find that person.");
+  const requests = (await db.select().from(practiceRequests)).filter(
+    (row) =>
+      (row.requesterId === current.id && row.receiverId === otherId) ||
+      (row.receiverId === current.id && row.requesterId === otherId)
+  );
+  const sessions = (await db.select().from(practiceSessions)).filter(
+    (row) =>
+      (row.requesterId === current.id && row.receiverId === otherId) ||
+      (row.receiverId === current.id && row.requesterId === otherId)
+  );
+  const requestIds = requests.map((row) => row.id);
+  const events = requestIds.length
+    ? (await db.select().from(requestEvents)).filter((row) => requestIds.includes(row.requestId))
+    : [];
+  const notes = await db.select().from(feedback);
+  const quotes = await db.select().from(testimonials);
+  const relatedFeedback = notes.filter(
+    (row) =>
+      (row.fromUserId === current.id && row.toUserId === otherId) ||
+      (row.fromUserId === otherId && row.toUserId === current.id)
+  );
+  const relatedQuotes = quotes.filter(
+    (row) =>
+      (row.fromUserId === current.id && row.toUserId === otherId) ||
+      (row.fromUserId === otherId && row.toUserId === current.id)
+  );
+  let thread = null as Awaited<ReturnType<typeof listMessages>> | null;
+  try {
+    const conversation = await getOrCreateConversation(otherId);
+    thread = await listMessages(conversation.id);
+  } catch {
+    thread = null;
+  }
+  const blocked = !(await pairAllowed(current.id, otherId));
+  return {
+    other,
+    otherId,
+    otherName: other.fullName,
+    blocked,
+    requests: requests.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
+    sessions: sessions.sort((a, b) => b.startUtc.getTime() - a.startUtc.getTime()),
+    events: events.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()),
+    feedback: relatedFeedback,
+    testimonials: relatedQuotes,
+    thread,
+    now,
+  };
 }
 
 export async function listNotifications() {

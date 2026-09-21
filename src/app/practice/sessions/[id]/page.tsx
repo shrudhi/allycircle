@@ -8,7 +8,9 @@ import {
   attendanceAction,
   cancelSessionAction,
   proposeRescheduleAction,
+  proposeSessionTwoWayAction,
   respondRescheduleAction,
+  respondSessionTwoWayAction,
   superLikeAction,
 } from "@/app/actions/app";
 import { JoinButton } from "@/components/join-button";
@@ -16,6 +18,8 @@ import { Button } from "@/components/ui/button";
 import { formatInTimeZone } from "@/lib/domain/timezone";
 import { formatLabel } from "@/lib/domain/copy";
 import type { RequestFormat } from "@/lib/domain/types";
+import { SafetyMenu } from "@/components/safety-menu";
+import { productConfig } from "@/lib/config/product";
 
 export default async function SessionPage({ params }: { params: Promise<{ id: string }> }) {
   const current = await getSessionUser();
@@ -30,11 +34,23 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
 
   return (
     <AppShell name={current.profile.fullName}>
-      <p className="text-xs uppercase tracking-[0.16em] text-[#d4af37]">Session</p>
-      <h1 className="mt-2 text-3xl font-semibold">{data.otherName}</h1>
-      <p className="mt-2 text-[#a0a0a0]">
-        {formatLabel(session.format, "detail")} · {formatInTimeZone(session.startUtc, current.profile.timezone)}
-      </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-[0.16em] text-[#d4af37]">Session</p>
+          <h1 className="mt-2 text-3xl font-semibold">{data.otherName}</h1>
+          <p className="mt-2 text-[#a0a0a0]">
+            {formatLabel(session.format, "detail")} · {formatInTimeZone(session.startUtc, current.profile.timezone)}
+          </p>
+          {session.format === "reciprocal_swap" ? (
+            <p className="mt-3 text-sm text-[#a0a0a0]">
+              First {productConfig.interviewMeMinutes} min: they interview you. Next {productConfig.interviewMeMinutes} min: you interview them.
+            </p>
+          ) : (
+            <p className="mt-3 text-sm text-[#a0a0a0]">They interview you for {productConfig.interviewMeMinutes} minutes.</p>
+          )}
+        </div>
+        <SafetyMenu userId={data.otherId} />
+      </div>
       <p className="mt-4 text-sm">
         Room status:{" "}
         {session.meetProvisionState === "ready"
@@ -68,10 +84,40 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
           ) : null}
         </div>
       ) : null}
+      {data.pendingTwoWay ? (
+        <div className="mt-6 rounded-2xl border border-[#d4af37]/40 bg-[#1e1e1e] p-5">
+          <p className="font-medium">Two-way proposal</p>
+          <p className="mt-2 text-sm text-[#a0a0a0]">
+            The original 30 minutes stay. Confirming adds 30 minutes after, if that time is still free.
+          </p>
+          {data.canRespondToTwoWay ? (
+            <div className="mt-4 flex flex-wrap gap-3">
+              <form action={respondSessionTwoWayAction}>
+                <input type="hidden" name="sessionId" value={id} />
+                <input type="hidden" name="action" value="accept" />
+                <Button className="gold-outline">Confirm two-way (60 min)</Button>
+              </form>
+              <form action={respondSessionTwoWayAction}>
+                <input type="hidden" name="sessionId" value={id} />
+                <input type="hidden" name="action" value="decline" />
+                <Button variant="ghost">Keep 30 min</Button>
+              </form>
+            </div>
+          ) : data.iProposedTwoWay ? (
+            <p className="mt-3 text-sm text-[#a0a0a0]">Waiting for {data.otherName} to confirm.</p>
+          ) : null}
+        </div>
+      ) : null}
       <div className="mt-6 flex flex-wrap gap-3">
         {data.joinOpen && session.state !== "cancelled" ? <JoinButton sessionId={id} pulse /> : null}
-        <Link href={`/messages?to=${data.otherId}`} className="text-sm text-[#d4af37]">
-          Message
+        {session.state === "scheduled" && data.canProposeTwoWay ? (
+          <form action={proposeSessionTwoWayAction}>
+            <input type="hidden" name="sessionId" value={id} />
+            <Button variant="outline">Propose two-way</Button>
+          </form>
+        ) : null}
+        <Link href={`/practice/with/${data.otherId}`} className="text-sm text-[#d4af37]">
+          Open full conversation
         </Link>
         {["completed", "did_not_happen", "cancelled"].includes(session.state) ? (
           <Link href={`/allies/${data.otherId}/request`} className="text-sm text-[#d4af37]">

@@ -13,21 +13,19 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
   const { id } = await params;
   const data = await getAllyProfile(id);
   const interviewSlots = await listSlotsForAlly(id, "interview_me");
-  const swapSlots = data.canSwap ? await listSlotsForAlly(id, "reciprocal_swap") : [];
   const zone = current.profile.timezone;
 
   return (
     <AppShell name={current.profile.fullName}>
       <h1 className="text-3xl font-semibold">Request practice with {data.ally.fullName}</h1>
       <p className="mt-2 text-sm text-[#a0a0a0]">
-        Choose whether they interview you, or you take turns. Then pick a date they already opened — or send the request and let them suggest a time.
+        They interview you for 30 minutes. Pick a date and time from their availability. Two-way is optional and only starts if you both agree.
       </p>
       <RequestForm
         action={sendRequestAction}
         allyId={id}
         canSwap={data.canSwap}
         interviewSlots={slotPickerViews(interviewSlots, zone)}
-        swapSlots={slotPickerViews(swapSlots, zone)}
       />
     </AppShell>
   );

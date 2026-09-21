@@ -1,5 +1,4 @@
 import { productConfig } from "@/lib/config/product";
-import { interviewPaceLabel } from "@/lib/domain/copy";
 
 export type RankableAlly = {
   id: string;
@@ -72,31 +71,32 @@ export function matchReasons(input: {
   overlappingTopics: string[];
   now: Date;
   interviewPace?: string | null;
+  availableThisWeek?: boolean;
+  currentTitle?: string | null;
 }): MatchReason[] {
+  const years =
+    input.experienceYears >= 10
+      ? "10+ years"
+      : `${input.experienceYears} year${input.experienceYears === 1 ? "" : "s"}`;
   const reasons: MatchReason[] = [
-    { code: "same_field", label: `Same ${input.fieldLabel} field` },
     {
       code: "experience",
-      label:
-        input.experienceYears >= 10
-          ? "10+ years in this kind of work"
-          : `${input.experienceYears} year${input.experienceYears === 1 ? "" : "s"} in this kind of work`,
+      label: input.currentTitle
+        ? `${input.currentTitle} · ${years} in ${input.fieldLabel}`
+        : `${years} in ${input.fieldLabel}`,
     },
   ];
-  if (input.interviewPace === "active") {
-    reasons.push({ code: "pace", label: interviewPaceLabel("active") });
+  if (input.overlappingTopics[0]) {
+    reasons.push({ code: "topic", label: input.overlappingTopics[0] });
   }
   const activity = activityScore(input.lastMeaningfulAt, input.now);
   if (activity >= 1) {
-    reasons.push({ code: "active_week", label: "Practiced or messaged this week" });
+    reasons.push({ code: "active_week", label: "Active this week" });
   } else if (activity >= 0.45) {
-    reasons.push({ code: "active_month", label: "Around this month" });
+    reasons.push({ code: "active_month", label: "Active this month" });
   }
-  if (input.overlappingTopics[0]) {
-    reasons.push({
-      code: "topic",
-      label: `Can interview you on ${input.overlappingTopics[0]}`,
-    });
+  if (input.availableThisWeek) {
+    reasons.push({ code: "available", label: "Available this week" });
   }
   return reasons.slice(0, 3);
 }

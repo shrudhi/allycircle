@@ -9,7 +9,9 @@ import {
   helpedPeersCopy,
   interviewerIdsForCompletedSession,
   isJoinWindowOpen,
+  matchesExperienceBand,
   rangesOverlap,
+  twoWayEndFromStart,
 } from "@/lib/domain/scheduling";
 import { isRequestExpired, isTakingABreak } from "@/lib/domain/types";
 
@@ -205,7 +207,10 @@ describe("scheduling and sessions", () => {
         receiverId: "b",
       })
     ).toEqual(["a", "b"]);
-    expect(helpedPeersCopy(12)).toBe("Helped 12 peers practice");
+    expect(helpedPeersCopy(12)).toBe("12 interviews conducted");
+    expect(matchesExperienceBand(4, "3-5")).toBe(true);
+    expect(matchesExperienceBand(9, "3-5")).toBe(false);
+    expect(twoWayEndFromStart(new Date("2026-09-22T16:00:00Z")).toISOString()).toBe("2026-09-22T17:00:00.000Z");
   });
 
   it("does not offer a slot that overlaps an existing session", () => {

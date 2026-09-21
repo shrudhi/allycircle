@@ -2,11 +2,13 @@ import { and, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { productConfig } from "@/lib/config/product";
 import { professionalFields, resolveProfessionalField } from "@/lib/config/fields";
+import { suggestedTopics } from "@/lib/config/topics";
 import { analyticsEvents } from "@/lib/analytics/taxonomy";
 import { markMeaningful, track } from "@/lib/analytics/track";
 import { requireMarketplaceUser, requireSessionUser } from "@/lib/auth/session";
 import { getDb, getNow } from "@/lib/db";
 import {
+  availabilityWindows,
   conversations,
   education,
   employment,
@@ -22,8 +24,13 @@ import {
 } from "@/lib/db/schema";
 import { canInterview, canOfferReciprocalSwap } from "@/lib/domain/eligibility";
 import { matchReasons, rankAllies } from "@/lib/domain/ranking";
-import { helpedPeersCopy, interviewerIdsForCompletedSession } from "@/lib/domain/scheduling";
-import { interviewPaceLabel } from "@/lib/domain/copy";
+import {
+  activityLabel,
+  interviewsConductedCopy,
+  interviewerIdsForCompletedSession,
+  matchesExperienceBand,
+} from "@/lib/domain/scheduling";
+import { weekdayInTimeZone } from "@/lib/domain/timezone";
 import { pairAllowed } from "@/lib/server/safety";
 
 async function pastConnectionIds(userId: string) {
@@ -79,9 +86,11 @@ export async function publicTestimonials(userId: string) {
 export async function findAllies(input: {
   query?: string;
   fieldId?: string;
-  minExperience?: number;
+  experienceBand?: string;
   company?: string;
   topic?: string;
+  availability?: string;
+  format?: "interview_me" | "reciprocal_swap";
   tab?: "for-you" | "connected" | "saved";
   cursor?: string | null;
 }) {
@@ -95,6 +104,15 @@ export async function findAllies(input: {
   const savedIds = new Set(saved.map((row) => row.allyId));
   const connectedIds = input.tab === "connected" ? await pastConnectionIds(current.id) : null;
   const jobs = await db.select().from(employment);
+  const windows = await db.select().from(availabilityWindows);
+  const viewerPerson = {
+    id: viewer.userId,
+    fieldId: viewer.fieldId,
+    fieldCustom: viewer.fieldCustom,
+    experienceYears: viewer.experienceYears,
+    openToBeInterviewed: viewer.openToBeInterviewed,
+    openToInterviewOthers: viewer.openToInterviewOthers,
+  };
 
   const eligible: { ally: typeof allProfiles[number]; allyTopics: typeof topics }[] = [];
   for (const ally of allProfiles) {
@@ -109,29 +127,43 @@ export async function findAllies(input: {
       openToBeInterviewed: ally.openToBeInterviewed,
       openToInterviewOthers: ally.openToInterviewOthers,
     };
-    if (!canInterview(person, {
-      id: viewer.userId,
-      fieldId: viewer.fieldId,
-      fieldCustom: viewer.fieldCustom,
-      experienceYears: viewer.experienceYears,
-      openToBeInterviewed: viewer.openToBeInterviewed,
-      openToInterviewOthers: viewer.openToInterviewOthers,
-    }, true)) {
-      continue;
-    }
+    if (!canInterview(person, viewerPerson, true)) continue;
     if (input.tab === "saved" && !savedIds.has(ally.userId)) continue;
     if (input.tab === "connected" && !connectedIds?.has(ally.userId)) continue;
     if (input.fieldId && ally.fieldId !== input.fieldId) continue;
-    if (typeof input.minExperience === "number" && ally.experienceYears < input.minExperience) continue;
+    if (!matchesExperienceBand(ally.experienceYears, input.experienceBand)) continue;
+    const allyJobs = jobs.filter((job) => job.userId === ally.userId);
     if (input.company) {
-      if (!ally.currentCompany || ally.currentCompany.toLowerCase() !== input.company.toLowerCase()) continue;
+      const needle = input.company.toLowerCase();
+      const companyHit =
+        (ally.currentCompany || "").toLowerCase().includes(needle) ||
+        allyJobs.some((job) => job.company.toLowerCase().includes(needle));
+      if (!companyHit) continue;
     }
     const allyTopics = topics.filter((topic) => topic.userId === ally.userId);
+    const allyWindows = windows.filter((row) => row.userId === ally.userId);
+    const canSwap = canOfferReciprocalSwap(viewerPerson, person, true);
+    if (input.format === "reciprocal_swap" && (!canSwap || !ally.openToBeInterviewed || !ally.openToInterviewOthers)) {
+      continue;
+    }
+    if (input.availability) {
+      if (!allyWindows.length) continue;
+      if (input.availability === "today") {
+        const weekday = weekdayInTimeZone(now, ally.timezone);
+        if (!allyWindows.some((row) => row.weekday === weekday)) continue;
+      } else if (input.availability !== "week" && /^[0-6]$/.test(input.availability)) {
+        const weekday = Number(input.availability);
+        if (!allyWindows.some((row) => row.weekday === weekday)) continue;
+      }
+    }
     if (input.topic) {
       const needle = input.topic.toLowerCase();
-      if (!allyTopics.some((topic) => topic.label.toLowerCase().includes(needle))) continue;
+      const topicHit =
+        allyTopics.some((topic) => topic.label.toLowerCase().includes(needle)) ||
+        fieldLabel(ally.fieldId, ally.fieldCustom).toLowerCase().includes(needle) ||
+        (ally.currentTitle || "").toLowerCase().includes(needle);
+      if (!topicHit) continue;
     }
-    const allyJobs = jobs.filter((job) => job.userId === ally.userId);
     const haystack = [
       ally.fullName,
       ally.currentTitle,
@@ -165,7 +197,7 @@ export async function findAllies(input: {
         viewerExperienceYears: viewer.experienceYears,
         topicOverlapCount: overlap.length,
         hasDeclaredTopics: allyTopics.length > 0,
-        hasUpcomingAvailability: true,
+        hasUpcomingAvailability: windows.some((row) => row.userId === ally.userId),
         recentPageOneImpressions: 0,
         interviewPaceActive: ally.interviewPace !== "casual",
       };
@@ -190,6 +222,7 @@ export async function findAllies(input: {
     const overlap = row.allyTopics
       .map((topic) => topic.label)
       .filter((label) => viewerTopics.some((item) => item.toLowerCase() === label.toLowerCase()));
+    const hasWindows = windows.some((item) => item.userId === row.ally.userId);
     const reasons = matchReasons({
       fieldLabel: fieldLabel(row.ally.fieldId, row.ally.fieldCustom),
       experienceYears: row.ally.experienceYears,
@@ -197,6 +230,8 @@ export async function findAllies(input: {
       overlappingTopics: overlap,
       now,
       interviewPace: row.ally.interviewPace,
+      availableThisWeek: hasWindows,
+      currentTitle: row.ally.currentTitle,
     });
     await db.insert(recommendationLogs).values({
       id: nanoid(),
@@ -215,13 +250,11 @@ export async function findAllies(input: {
       experienceYears: row.ally.experienceYears,
       fieldLabel: fieldLabel(row.ally.fieldId, row.ally.fieldCustom),
       photoPath: row.ally.photoPath,
-      activity: row.ally.lastMeaningfulAt && now.getTime() - row.ally.lastMeaningfulAt.getTime() < 7 * 86400000
-        ? "Active this week"
-        : row.ally.lastMeaningfulAt && now.getTime() - row.ally.lastMeaningfulAt.getTime() < 30 * 86400000
-          ? "Active this month"
-          : null,
-      helpedCopy: helpedPeersCopy(helped),
-      interviewPace: interviewPaceLabel(row.ally.interviewPace),
+      activity: activityLabel(row.ally.lastMeaningfulAt, now),
+      helpedCopy: interviewsConductedCopy(helped),
+      interviewsConducted: helped,
+      linkedinUrl: row.ally.linkedinUrl,
+      openToTwoWay: row.ally.openToBeInterviewed && row.ally.openToInterviewOthers,
       topics: row.allyTopics.map((topic) => topic.label).slice(0, 4),
       reasons,
       saved: savedIds.has(row.ally.userId),
@@ -258,6 +291,7 @@ export async function findAllies(input: {
     nextCursor,
     viewerField: fieldLabel(viewer.fieldId, viewer.fieldCustom),
     fields: professionalFields,
+    topics: suggestedTopics,
   };
 }
 
@@ -288,11 +322,12 @@ export async function getAllyProfile(allyId: string) {
   const reasons = matchReasons({
     fieldLabel: fieldLabel(ally.fieldId, ally.fieldCustom),
     experienceYears: ally.experienceYears,
-    lastMeaningfulAt: ally.lastMeaningfulAt,
-    overlappingTopics: overlap,
-    now,
-    interviewPace: ally.interviewPace,
-  });
+      lastMeaningfulAt: ally.lastMeaningfulAt,
+      overlappingTopics: overlap,
+      now,
+      interviewPace: ally.interviewPace,
+      currentTitle: ally.currentTitle,
+    });
   const canSwap = canOfferReciprocalSwap(
     {
       id: current.id,
@@ -321,12 +356,15 @@ export async function getAllyProfile(allyId: string) {
     employment: jobs,
     topics: topics.map((topic) => topic.label),
     saved: saved.length > 0,
-    helpedCopy: helpedPeersCopy(helped),
+    helpedCopy: interviewsConductedCopy(helped),
+    interviewsConducted: helped,
+    activity: activityLabel(ally.lastMeaningfulAt, now),
+    openToTwoWay: ally.openToBeInterviewed && ally.openToInterviewOthers,
     testimonials: quotes,
     reasons,
     canSwap,
     takingABreak: !ally.openToBeInterviewed && !ally.openToInterviewOthers,
-    interviewPace: interviewPaceLabel(ally.interviewPace),
+    interviewPace: ally.interviewPace,
     superLikeCount: likes.length,
   };
 }
@@ -371,14 +409,27 @@ export async function getHomeData() {
     (row, index, all) => all.findIndex((item) => item.id === row.id) === index
   );
   const sessions = allSessions
-    .filter((row) => row.state === "scheduled" || row.state === "awaiting_attendance")
-    .filter((row) => row.endUtc.getTime() + 30 * 60 * 1000 >= now.getTime())
+    .filter((row) => row.state === "scheduled")
+    .filter((row) => row.endUtc.getTime() >= now.getTime())
     .sort((a, b) => a.startUtc.getTime() - b.startUtc.getTime());
+  const next = sessions[0] || null;
+  const people = await db.select().from(profiles);
+  const otherId = next
+    ? next.requesterId === current.id
+      ? next.receiverId
+      : next.requesterId
+    : null;
   return {
     needsOnboarding: false as const,
     name: current.profile.fullName,
     fieldLabel: fieldLabel(current.profile.fieldId, current.profile.fieldCustom),
-    nextSession: sessions[0] || null,
+    nextSession: next
+      ? {
+          ...next,
+          otherName: people.find((row) => row.userId === otherId)?.fullName || "Ally",
+          otherId,
+        }
+      : null,
     takingABreak: !current.profile.openToBeInterviewed && !current.profile.openToInterviewOthers,
     isNew: allSessions.length === 0,
   };

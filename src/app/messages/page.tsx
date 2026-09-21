@@ -30,7 +30,17 @@ export default async function MessagesPage({
           {conversations.length === 0 ? <p className="text-sm text-[#a0a0a0]">No conversations yet.</p> : null}
           {conversations.map((item) => (
             <Link key={item.id} href={`/messages?id=${item.id}`} className="block rounded-xl border border-[#2d2d2d] bg-[#1e1e1e] p-3 text-sm">
-              {item.otherName}
+              <span className="flex items-center justify-between gap-2">
+                {item.otherName}
+                {item.unread ? <span className="size-2 rounded-full bg-[#d4af37]" /> : null}
+              </span>
+              {item.unread ? <p className="mt-1 text-xs text-[#d4af37]">New message</p> : null}
+              <p className="mt-2 text-xs text-[#a0a0a0]">{item.lastPreview}</p>
+              <p className="mt-2">
+                <Link href={`/practice/with/${item.otherId}`} className="text-xs text-[#d4af37]">
+                  Open practice
+                </Link>
+              </p>
             </Link>
           ))}
         </aside>

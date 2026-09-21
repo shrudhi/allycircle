@@ -221,6 +221,8 @@ export const practiceRequests = pgTable(
     proposedStartUtc: ts("proposed_start_utc"),
     proposedEndUtc: ts("proposed_end_utc"),
     expiresAt: ts("expires_at").notNull(),
+    openToTwoWay: boolean("open_to_two_way").notNull().default(false),
+    pendingTwoWayBy: text("pending_two_way_by"),
     createdAt: ts("created_at").notNull(),
     updatedAt: ts("updated_at").notNull(),
   },
@@ -263,6 +265,7 @@ export const practiceSessions = pgTable(
     receiverAttendance: text("receiver_attendance"),
     pendingRescheduleStartUtc: ts("pending_reschedule_start_utc"),
     pendingRescheduleBy: text("pending_reschedule_by"),
+    pendingTwoWayBy: text("pending_two_way_by"),
     createdAt: ts("created_at").notNull(),
     updatedAt: ts("updated_at").notNull(),
   },
@@ -327,6 +330,20 @@ export const superLikes = pgTable(
     createdAt: ts("created_at").notNull(),
   },
   (table) => [uniqueIndex("super_likes_session_from_idx").on(table.sessionId, table.fromUserId)]
+);
+
+export const conversationReads = pgTable(
+  "conversation_reads",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    conversationId: text("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    lastReadAt: ts("last_read_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.conversationId] })]
 );
 
 export const testimonials = pgTable("testimonials", {
