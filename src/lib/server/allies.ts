@@ -9,6 +9,7 @@ import { requireMarketplaceUser, requireSessionUser } from "@/lib/auth/session";
 import { getDb, getNow } from "@/lib/db";
 import {
   availabilityWindows,
+  blocks,
   conversations,
   education,
   employment,
@@ -105,6 +106,25 @@ export async function findAllies(input: {
   const connectedIds = input.tab === "connected" ? await pastConnectionIds(current.id) : null;
   const jobs = await db.select().from(employment);
   const windows = await db.select().from(availabilityWindows);
+  const blockRows = await db.select().from(blocks);
+  const blockedIds = new Set(
+    blockRows
+      .filter((row) => row.blockerId === current.id || row.blockedId === current.id)
+      .map((row) => (row.blockerId === current.id ? row.blockedId : row.blockerId))
+  );
+  const completedSessions = await db
+    .select()
+    .from(practiceSessions)
+    .where(eq(practiceSessions.state, "completed"));
+  const conductedFor = (userId: string) =>
+    completedSessions.filter((row) =>
+      interviewerIdsForCompletedSession({
+        format: row.format as "interview_me" | "reciprocal_swap",
+        interviewerId: row.interviewerId,
+        requesterId: row.requesterId,
+        receiverId: row.receiverId,
+      }).includes(userId)
+    ).length;
   const viewerPerson = {
     id: viewer.userId,
     fieldId: viewer.fieldId,
@@ -118,7 +138,7 @@ export async function findAllies(input: {
   for (const ally of allProfiles) {
     if (ally.userId === current.id) continue;
     if (!ally.onboardingComplete) continue;
-    if (!(await pairAllowed(current.id, ally.userId))) continue;
+    if (blockedIds.has(ally.userId)) continue;
     const person = {
       id: ally.userId,
       fieldId: ally.fieldId,
@@ -217,8 +237,9 @@ export async function findAllies(input: {
   const nextCursor = page.length === productConfig.resultsPageSize ? page.at(-1)?.ally.userId : null;
 
   const cards = [];
+  const logs = [];
   for (const [index, row] of page.entries()) {
-    const helped = await interviewsConductedCount(row.ally.userId);
+    const helped = conductedFor(row.ally.userId);
     const overlap = row.allyTopics
       .map((topic) => topic.label)
       .filter((label) => viewerTopics.some((item) => item.toLowerCase() === label.toLowerCase()));
@@ -233,7 +254,7 @@ export async function findAllies(input: {
       availableThisWeek: hasWindows,
       currentTitle: row.ally.currentTitle,
     });
-    await db.insert(recommendationLogs).values({
+    logs.push({
       id: nanoid(),
       viewerId: current.id,
       allyId: row.ally.userId,
@@ -279,6 +300,9 @@ export async function findAllies(input: {
       ),
       isTestUser: row.ally.isTestUser,
     });
+  }
+  if (logs.length) {
+    await db.insert(recommendationLogs).values(logs);
   }
 
   await track(cards.length ? analyticsEvents.ally_search_viewed : analyticsEvents.ally_search_empty, {

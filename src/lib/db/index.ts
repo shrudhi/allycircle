@@ -18,6 +18,7 @@ const globalForDb = globalThis as unknown as {
   allyReady?: Promise<AppDb>;
   allyApplySchema?: (sql: string) => Promise<void>;
   appliedSchemaSql?: string;
+  allySeeding?: boolean;
 };
 
 async function applySchemaSql(exec: (sql: string) => Promise<void>) {
@@ -53,14 +54,23 @@ async function createDb() {
 
 export async function getDb() {
   if (!globalForDb.allyReady) {
-    globalForDb.allyReady = createDb().then(async (db) => {
+    globalForDb.allyReady = (async () => {
+      const db = await createDb();
       globalForDb.allyDb = db;
-      const { seedDevelopmentData } = await import("@/lib/db/seed");
-      await seedDevelopmentData(db);
+      globalForDb.allySeeding = true;
+      try {
+        const { seedDevelopmentData } = await import("@/lib/db/seed");
+        await seedDevelopmentData(db);
+      } finally {
+        globalForDb.allySeeding = false;
+      }
       return db;
-    });
+    })();
   }
-  const db = globalForDb.allyDb || (await globalForDb.allyReady);
+  if (globalForDb.allySeeding && globalForDb.allyDb) {
+    return globalForDb.allyDb;
+  }
+  const db = await globalForDb.allyReady;
   if (globalForDb.allyApplySchema && globalForDb.appliedSchemaSql !== SCHEMA_SQL) {
     await applySchemaSql(globalForDb.allyApplySchema);
     globalForDb.appliedSchemaSql = SCHEMA_SQL;

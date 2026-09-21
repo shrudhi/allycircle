@@ -36,13 +36,13 @@ export async function seedDevelopmentData(db: Db) {
     return;
   }
   const existing = await db.select().from(user).where(eq(user.email, testPeople[0].email)).limit(1);
-  const { getAuth } = await import("@/lib/auth");
-  const auth = await getAuth();
   const now = new Date();
 
   for (const [index, person] of testPeople.entries()) {
     let [account] = await db.select().from(user).where(eq(user.email, person.email)).limit(1);
     if (!account) {
+      const { getAuth } = await import("@/lib/auth");
+      const auth = await getAuth();
       const created = await auth.api.signUpEmail({
         body: {
           email: person.email,

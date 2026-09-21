@@ -9,7 +9,6 @@ import { emailVerificationRequired } from "@/lib/auth/email-policy";
 import { eq } from "drizzle-orm";
 
 let authInstance: ReturnType<typeof createAuth> | undefined;
-let authReady: Promise<ReturnType<typeof createAuth>> | undefined;
 
 function origin() {
   return process.env.NEXT_PUBLIC_APP_URL || "http://127.0.0.1:43131";
@@ -90,13 +89,9 @@ function createAuth(db: Awaited<ReturnType<typeof getDb>>) {
 
 export async function getAuth() {
   if (authInstance) return authInstance;
-  if (!authReady) {
-    authReady = getDb().then((db) => {
-      authInstance = createAuth(db);
-      return authInstance;
-    });
-  }
-  return authReady;
+  const db = await getDb();
+  if (!authInstance) authInstance = createAuth(db);
+  return authInstance;
 }
 
 export function isGoogleLoginConfigured() {

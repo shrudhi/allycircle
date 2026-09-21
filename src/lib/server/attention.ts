@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { eq, or } from "drizzle-orm";
 import { requireMarketplaceUser } from "@/lib/auth/session";
 import { getDb, getNow } from "@/lib/db";
@@ -10,7 +11,7 @@ import {
   practiceSessions,
 } from "@/lib/db/schema";
 
-export async function getAttentionCounts() {
+async function loadAttentionCounts() {
   const current = await requireMarketplaceUser();
   const db = await getDb();
   const now = await getNow();
@@ -22,21 +23,30 @@ export async function getAttentionCounts() {
     .select()
     .from(conversations)
     .where(or(eq(conversations.userLowId, current.id), eq(conversations.userHighId, current.id))!);
-  const reads = await db.select().from(conversationReads).where(eq(conversationReads.userId, current.id));
+  let reads: { conversationId: string; lastReadAt: Date }[] = [];
+  try {
+    reads = await db.select().from(conversationReads).where(eq(conversationReads.userId, current.id));
+  } catch {
+    reads = [];
+  }
   const readMap = new Map(reads.map((row) => [row.conversationId, row.lastReadAt]));
-  const allMessages = await db.select().from(messages);
-  let unreadMessages = 0;
   const unreadByOther = new Set<string>();
-  for (const thread of threads) {
-    const otherId = thread.userLowId === current.id ? thread.userHighId : thread.userLowId;
-    const lastRead = readMap.get(thread.id);
-    const incoming = allMessages.filter(
-      (row) => row.conversationId === thread.id && row.senderId !== current.id
-    );
-    const unread = incoming.some((row) => !lastRead || row.createdAt.getTime() > lastRead.getTime());
-    if (unread) {
-      unreadMessages += 1;
-      unreadByOther.add(otherId);
+  let unreadMessages = 0;
+  if (threads.length) {
+    const threadMessages = await db.select().from(messages);
+    for (const thread of threads) {
+      const otherId = thread.userLowId === current.id ? thread.userHighId : thread.userLowId;
+      const lastRead = readMap.get(thread.id);
+      const unread = threadMessages.some(
+        (row) =>
+          row.conversationId === thread.id &&
+          row.senderId !== current.id &&
+          (!lastRead || row.createdAt.getTime() > lastRead.getTime())
+      );
+      if (unread) {
+        unreadMessages += 1;
+        unreadByOther.add(otherId);
+      }
     }
   }
 
@@ -54,13 +64,13 @@ export async function getAttentionCounts() {
     if (["pending", "alternate_time_proposed", "time_unavailable"].includes(row.state)) return true;
     if (row.pendingTwoWayBy && row.pendingTwoWayBy !== current.id && row.state === "pending") return true;
     return false;
-  });
+  }).length;
   const sentAction = requests.filter((row) => {
     if (row.requesterId !== current.id) return false;
     if (["alternate_time_proposed", "time_unavailable"].includes(row.state)) return true;
     if (row.pendingTwoWayBy && row.pendingTwoWayBy !== current.id) return true;
     return false;
-  });
+  }).length;
   const sessionAction = sessions.filter((row) => {
     if (row.state === "awaiting_attendance") return true;
     if (row.pendingRescheduleStartUtc && row.pendingRescheduleBy && row.pendingRescheduleBy !== current.id) {
@@ -68,17 +78,31 @@ export async function getAttentionCounts() {
     }
     if (row.pendingTwoWayBy && row.pendingTwoWayBy !== current.id && row.state === "scheduled") return true;
     return false;
-  });
-
-  const practiceAction = receivedAction.length + sentAction.length + sessionAction.length;
+  }).length;
 
   return {
     unreadMessages,
     unreadNotifications,
-    receivedAction: receivedAction.length,
-    sentAction: sentAction.length,
-    practiceAction,
+    receivedAction,
+    sentAction,
+    practiceAction: receivedAction + sentAction + sessionAction,
     unreadByOther,
     now,
   };
 }
+
+export const getAttentionCounts = cache(async () => {
+  try {
+    return await loadAttentionCounts();
+  } catch {
+    return {
+      unreadMessages: 0,
+      unreadNotifications: 0,
+      receivedAction: 0,
+      sentAction: 0,
+      practiceAction: 0,
+      unreadByOther: new Set<string>(),
+      now: new Date(),
+    };
+  }
+});

@@ -146,13 +146,17 @@ export async function listMessages(conversationId: string) {
     .where(eq(messages.conversationId, conversationId))
     .orderBy(messages.createdAt);
   const now = await getNow();
-  await db
-    .insert(conversationReads)
-    .values({ userId: current.id, conversationId, lastReadAt: now })
-    .onConflictDoUpdate({
-      target: [conversationReads.userId, conversationReads.conversationId],
-      set: { lastReadAt: now },
-    });
+  try {
+    await db
+      .insert(conversationReads)
+      .values({ userId: current.id, conversationId, lastReadAt: now })
+      .onConflictDoUpdate({
+        target: [conversationReads.userId, conversationReads.conversationId],
+        set: { lastReadAt: now },
+      });
+  } catch {
+    /* unread state is best-effort in local preview */
+  }
   return {
     conversationId,
     otherId,
