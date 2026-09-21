@@ -259,6 +259,8 @@ export const practiceSessions = pgTable(
     calendarOrganizerUserId: text("calendar_organizer_user_id"),
     requesterAttendance: text("requester_attendance"),
     receiverAttendance: text("receiver_attendance"),
+    pendingRescheduleStartUtc: ts("pending_reschedule_start_utc"),
+    pendingRescheduleBy: text("pending_reschedule_by"),
     createdAt: ts("created_at").notNull(),
     updatedAt: ts("updated_at").notNull(),
   },

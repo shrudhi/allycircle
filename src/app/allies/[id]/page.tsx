@@ -6,6 +6,7 @@ import { getAllyProfile } from "@/lib/server/allies";
 import { blockAction, reportAction, toggleSaveAction } from "@/app/actions/app";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Initials } from "@/components/initials";
 import { reportReasonLabels } from "@/lib/domain/types";
 
 export default async function AllyProfilePage({ params }: { params: Promise<{ id: string }> }) {
@@ -18,10 +19,13 @@ export default async function AllyProfilePage({ params }: { params: Promise<{ id
   return (
     <AppShell name={current.profile?.fullName}>
       <div className="flex flex-col justify-between gap-4 md:flex-row">
-        <div>
-          <p className="text-xs uppercase tracking-[0.16em] text-[#d4af37]">{data.fieldLabel}</p>
-          <h1 className="mt-2 text-3xl font-semibold">{ally.fullName}</h1>
-          <p className="mt-2 text-[#a0a0a0]">{[ally.currentTitle, ally.currentCompany].filter(Boolean).join(" · ")}</p>
+        <div className="flex items-start gap-4">
+          <Initials name={ally.fullName} photoPath={ally.photoPath} size="lg" />
+          <div>
+            <p className="text-xs uppercase tracking-[0.16em] text-[#d4af37]">{data.fieldLabel}</p>
+            <h1 className="mt-2 text-3xl font-semibold">{ally.fullName}</h1>
+            <p className="mt-2 text-[#a0a0a0]">{[ally.currentTitle, ally.currentCompany].filter(Boolean).join(" · ")}</p>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <form action={toggleSaveAction.bind(null, id)}>

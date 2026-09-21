@@ -2,11 +2,31 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { saveProfileSetup, saveAvailability, connectMockCalendar, disconnectCalendar, submitFeedback, setTestimonialVisible, deleteAccount } from "@/lib/server/profile";
+import {
+  saveProfileSetup,
+  saveAvailability,
+  removeAvailabilityWindow,
+  connectMockCalendar,
+  disconnectCalendar,
+  submitFeedback,
+  setTestimonialVisible,
+  deleteAccount,
+} from "@/lib/server/profile";
 import { toggleSaveAlly } from "@/lib/server/allies";
 import { createPracticeRequest, respondToRequest } from "@/lib/server/requests";
-import { sendMessage, recordAttendance, cancelSession, joinSession, markNotificationsRead } from "@/lib/server/sessions";
+import {
+  sendMessage,
+  recordAttendance,
+  cancelSession,
+  joinSession,
+  markNotificationsRead,
+  proposeReschedule,
+  respondToReschedule,
+} from "@/lib/server/sessions";
 import { blockUser, reportUser } from "@/lib/server/moderation";
+import { saveProfilePhoto } from "@/lib/server/photos";
+import { requireSessionUser } from "@/lib/auth/session";
+import { setNowOverride } from "@/lib/db";
 import type { RequestFormat } from "@/lib/domain/types";
 import type { ReportReason } from "@/lib/domain/types";
 
@@ -30,7 +50,13 @@ export async function saveProfileAction(formData: FormData) {
     openToInterviewOthers: formData.get("openToInterviewOthers") === "on",
     topics,
   });
-  redirect("/home");
+  const photo = formData.get("photo");
+  if (photo instanceof File && photo.size > 0) {
+    const current = await requireSessionUser();
+    await saveProfilePhoto(current.id, photo);
+  }
+  const next = String(formData.get("next") || "/home");
+  redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/home");
 }
 
 export async function toggleSaveAction(allyId: string) {
@@ -64,12 +90,12 @@ export async function respondAction(formData: FormData) {
 export async function sendMessageAction(formData: FormData) {
   const otherId = String(formData.get("otherId"));
   const result = await sendMessage(otherId, String(formData.get("body") || ""));
-  redirect(`/messages/${result.conversationId}`);
+  redirect(`/messages?id=${result.conversationId}`);
 }
 
 export async function replyMessageAction(formData: FormData) {
   await sendMessage(String(formData.get("otherId")), String(formData.get("body") || ""));
-  revalidatePath(`/messages/${String(formData.get("conversationId"))}`);
+  revalidatePath("/messages");
 }
 
 export async function attendanceAction(formData: FormData) {
@@ -84,6 +110,19 @@ export async function cancelSessionAction(formData: FormData) {
 
 export async function joinSessionAction(sessionId: string) {
   return joinSession(sessionId);
+}
+
+export async function proposeRescheduleAction(formData: FormData) {
+  await proposeReschedule(String(formData.get("sessionId")), String(formData.get("startIso") || ""));
+  revalidatePath(`/practice/sessions/${String(formData.get("sessionId"))}`);
+}
+
+export async function respondRescheduleAction(formData: FormData) {
+  await respondToReschedule(
+    String(formData.get("sessionId")),
+    String(formData.get("action")) as "accept" | "decline"
+  );
+  revalidatePath(`/practice/sessions/${String(formData.get("sessionId"))}`);
 }
 
 export async function feedbackAction(formData: FormData) {
@@ -126,6 +165,27 @@ export async function availabilityAction(formData: FormData) {
   }
   await saveAvailability(windows);
   revalidatePath("/settings");
+}
+
+export async function removeAvailabilityAction(formData: FormData) {
+  await removeAvailabilityWindow(String(formData.get("windowId")));
+  revalidatePath("/settings");
+}
+
+export async function setClockAction(formData: FormData) {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("The preview clock isn’t available in production.");
+  }
+  const intent = String(formData.get("intent") || "set");
+  if (intent === "clear") {
+    await setNowOverride(null);
+  } else {
+    const local = String(formData.get("nowLocal") || "");
+    if (!local) throw new Error("Choose a time to jump the preview clock.");
+    await setNowOverride(new Date(local).toISOString());
+  }
+  revalidatePath("/dev/clock");
+  revalidatePath("/practice");
 }
 
 export async function connectCalendarAction() {

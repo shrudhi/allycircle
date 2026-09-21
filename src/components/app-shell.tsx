@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Bell, CalendarDays, Home, MessageCircle, Search, Settings } from "lucide-react";
 import { Logo } from "@/components/logo";
+import { Initials } from "@/components/initials";
+import { getSessionUser } from "@/lib/auth/session";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,19 +19,15 @@ const nav = [
   { href: "/messages", label: "Messages", icon: MessageCircle },
 ];
 
-export function AppShell({
+export async function AppShell({
   children,
   name,
 }: {
   children: React.ReactNode;
   name?: string;
 }) {
-  const initials = (name || "A")
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
+  const current = await getSessionUser();
+  const displayName = name || current?.profile?.fullName || current?.name || "A";
 
   return (
     <div className="min-h-screen">
@@ -56,8 +54,8 @@ export function AppShell({
               <Bell className="size-4" />
             </Link>
             <DropdownMenu>
-              <DropdownMenuTrigger className="gold-outline flex size-9 items-center justify-center rounded-full border border-[#2d2d2d] bg-[#1e1e1e] text-xs font-medium">
-                {initials}
+              <DropdownMenuTrigger className="gold-outline rounded-full">
+                <Initials name={displayName} photoPath={current?.profile?.photoPath} size="sm" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-52">
                 <DropdownMenuItem>

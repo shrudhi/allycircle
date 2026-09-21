@@ -39,6 +39,7 @@ Sign up with your own email to practice the real onboarding flow, then Find an A
 Development-only tools:
 
 - `/dev/inbox` — password reset and notification emails
+- `/dev/clock` — jump the server clock to test Join Session (T-15 through end+30), reminders, and request expiry
 - `/internal/metrics` — funnel and product health
 
 ## What is mocked until you connect accounts
@@ -64,6 +65,9 @@ Do **not** paste secrets into chat. Put them in `.env.local` or your host’s se
 - Public signal is “Helped N peers practice”, never a star rating
 - Block is immediate; existing sessions are not deleted
 - Account deletion lives in Settings
+- Reschedule keeps the same session until the other person accepts a new time
+- History includes Practice again, which opens a new request with that ally
+- Photos are optional; initials show on cards when there isn’t one
 
 ## Architecture
 

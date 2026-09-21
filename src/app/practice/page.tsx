@@ -24,6 +24,9 @@ export default async function PracticePage() {
             <Link key={session.id} href={`/practice/sessions/${session.id}`} className="gold-outline block rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-4">
               <p className="font-medium">{session.otherName}</p>
               <p className="text-sm text-[#a0a0a0]">{formatInTimeZone(session.startUtc, current.profile.timezone)} · {session.format.replaceAll("_", " ")}</p>
+              {session.pendingRescheduleStartUtc ? (
+                <p className="mt-2 text-sm text-[#d4af37]">A new time is waiting for confirmation</p>
+              ) : null}
               {session.joinOpen ? <p className="mt-2 text-sm text-[#d4af37]">Join Session is available</p> : null}
             </Link>
           ))}
@@ -32,6 +35,7 @@ export default async function PracticePage() {
       <section className="mt-10">
         <h2 className="text-lg font-medium">Requests</h2>
         <div className="mt-3 space-y-3">
+          {requests.length === 0 ? <p className="text-sm text-[#a0a0a0]">No practice requests yet.</p> : null}
           {requests.slice(0, 12).map((request) => (
             <Link key={request.id} href={`/practice/requests/${request.id}`} className="block rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-4">
               <p className="font-medium">{request.otherName}</p>
@@ -45,13 +49,19 @@ export default async function PracticePage() {
       <section className="mt-10">
         <h2 className="text-lg font-medium">History</h2>
         <div className="mt-3 space-y-3">
+          {history.length === 0 ? <p className="text-sm text-[#a0a0a0]">Completed sessions will show up here.</p> : null}
           {history.map((session) => (
-            <Link key={session.id} href={`/practice/sessions/${session.id}`} className="block rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-4">
-              <p className="font-medium">{session.otherName}</p>
-              <p className="text-sm text-[#a0a0a0]">
-                {formatInTimeZone(session.startUtc, current.profile.timezone)} · {session.state.replaceAll("_", " ")}
-              </p>
-            </Link>
+            <div key={session.id} className="flex flex-col gap-3 rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-4 sm:flex-row sm:items-center sm:justify-between">
+              <Link href={`/practice/sessions/${session.id}`} className="min-w-0">
+                <p className="font-medium">{session.otherName}</p>
+                <p className="text-sm text-[#a0a0a0]">
+                  {formatInTimeZone(session.startUtc, current.profile.timezone)} · {session.state.replaceAll("_", " ")}
+                </p>
+              </Link>
+              <Link href={`/allies/${session.otherId}/request`} className="text-sm text-[#d4af37]">
+                Practice again
+              </Link>
+            </div>
           ))}
         </div>
       </section>

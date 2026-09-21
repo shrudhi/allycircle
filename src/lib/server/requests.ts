@@ -1,12 +1,10 @@
-import { and, eq, or } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { analyticsEvents } from "@/lib/analytics/taxonomy";
 import { markMeaningful, notify, track } from "@/lib/analytics/track";
 import { requireMarketplaceUser } from "@/lib/auth/session";
-import { productConfig } from "@/lib/config/product";
 import { getDb, getNow } from "@/lib/db";
 import {
-  jobs,
   practiceRequests,
   practiceSessions,
   profiles,
@@ -21,6 +19,7 @@ import {
   sessionDurationMinutes,
 } from "@/lib/domain/scheduling";
 import { isRequestExpired, requestExpiryAt, type RequestFormat } from "@/lib/domain/types";
+import { enqueueJob, processJobs, scheduleSessionReminders } from "@/lib/server/jobs";
 import { activeSessionBusyRanges, calendarBusyRanges, pairAllowed } from "@/lib/server/safety";
 
 async function eligibilityPair(requesterId: string, receiverId: string) {
@@ -48,7 +47,11 @@ async function eligibilityPair(requesterId: string, receiverId: string) {
   return { requester, receiver, requesterPerson, receiverPerson, allowed };
 }
 
-export async function listSlotsForAlly(allyId: string, format: RequestFormat) {
+export async function listSlotsForAlly(
+  allyId: string,
+  format: RequestFormat,
+  opts?: { excludeSessionId?: string }
+) {
   const current = await requireMarketplaceUser();
   const db = await getDb();
   const now = await getNow();
@@ -60,8 +63,8 @@ export async function listSlotsForAlly(allyId: string, format: RequestFormat) {
     .from(availabilityWindows)
     .where(eq(availabilityWindows.userId, allyId));
   const busy = [
-    ...(await activeSessionBusyRanges(allyId)),
-    ...(await activeSessionBusyRanges(current.id)),
+    ...(await activeSessionBusyRanges(allyId, opts?.excludeSessionId)),
+    ...(await activeSessionBusyRanges(current.id, opts?.excludeSessionId)),
     ...(await calendarBusyRanges(allyId)),
   ];
   return generateBookableSlots({
@@ -71,23 +74,6 @@ export async function listSlotsForAlly(allyId: string, format: RequestFormat) {
     now,
     busy,
   }).slice(0, 24);
-}
-
-async function enqueueJob(type: string, runAt: Date, idempotencyKey: string, payload: Record<string, unknown>) {
-  const db = await getDb();
-  const now = await getNow();
-  await db
-    .insert(jobs)
-    .values({
-      id: nanoid(),
-      type,
-      runAt,
-      status: "queued",
-      idempotencyKey,
-      payloadJson: payload,
-      createdAt: now,
-    })
-    .onConflictDoNothing();
 }
 
 export async function createPracticeRequest(input: {
@@ -338,30 +324,7 @@ export async function respondToRequest(input: {
           .where(eq(practiceRequests.id, request.id));
       });
       await enqueueJob("provision_meet", now, `meet:${sessionId}`, { sessionId });
-      await enqueueJob(
-        "reminder",
-        new Date(start.getTime() - 24 * 60 * 60 * 1000),
-        `remind-24h:${sessionId}`,
-        { sessionId, kind: "24h" }
-      );
-      await enqueueJob(
-        "reminder",
-        new Date(start.getTime() - 60 * 60 * 1000),
-        `remind-1h:${sessionId}`,
-        { sessionId, kind: "1h" }
-      );
-      await enqueueJob(
-        "reminder",
-        new Date(start.getTime() - productConfig.joinWindowBeforeMinutes * 60 * 1000),
-        `remind-15m:${sessionId}`,
-        { sessionId, kind: "15m" }
-      );
-      await enqueueJob(
-        "reminder",
-        new Date(end.getTime() + 15 * 60 * 1000),
-        `feedback:${sessionId}`,
-        { sessionId, kind: "feedback" }
-      );
+      await scheduleSessionReminders(sessionId, start, end);
       const copy =
         state === "converted_to_one_way"
           ? "The 30-minute one-way session is confirmed for the first half of the original time."
@@ -383,7 +346,6 @@ export async function respondToRequest(input: {
       await markMeaningful(current.id);
       await track(analyticsEvents.request_accepted, { userId: current.id, properties: { converted: state === "converted_to_one_way" } });
       await track(analyticsEvents.session_confirmed, { userId: current.id });
-      const { processJobs } = await import("@/lib/server/jobs");
       await processJobs();
       return { ok: true as const, state, sessionId };
     } catch (error) {

@@ -6,6 +6,7 @@ import { findAllies } from "@/lib/server/allies";
 import { toggleSaveAction } from "@/app/actions/app";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Initials } from "@/components/initials";
 
 export default async function AlliesPage({
   searchParams,
@@ -64,11 +65,14 @@ export default async function AlliesPage({
           {result.cards.map((card) => (
             <article key={card.id} className="gold-outline rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-5">
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-medium">{card.name}</h2>
-                  <p className="text-sm text-[#a0a0a0]">
-                    {[card.title, card.company].filter(Boolean).join(" · ")}
-                  </p>
+                <div className="flex min-w-0 items-start gap-3">
+                  <Initials name={card.name} photoPath={card.photoPath} />
+                  <div>
+                    <h2 className="text-lg font-medium">{card.name}</h2>
+                    <p className="text-sm text-[#a0a0a0]">
+                      {[card.title, card.company].filter(Boolean).join(" · ")}
+                    </p>
+                  </div>
                 </div>
                 <form action={toggleSaveAction.bind(null, card.id)}>
                   <button className="text-xs text-[#d4af37]">{card.saved ? "Saved" : "Save"}</button>

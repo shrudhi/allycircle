@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { fieldsSharePracticeArea, resolveProfessionalField } from "@/lib/config/fields";
 import { canInterview, canOfferReciprocalSwap } from "@/lib/domain/eligibility";
 import { rankAllies } from "@/lib/domain/ranking";
+import { generateBookableSlots } from "@/lib/domain/availability";
 import {
   attendanceOutcome,
   convertedOneWayTimes,
@@ -168,6 +169,28 @@ describe("scheduling and sessions", () => {
       })
     ).toEqual(["a", "b"]);
     expect(helpedPeersCopy(12)).toBe("Helped 12 peers practice");
+  });
+
+  it("does not offer a slot that overlaps an existing session", () => {
+    const now = new Date("2026-09-21T12:00:00Z");
+    const windows = [{ weekday: 2, startMinutes: 16 * 60, endMinutes: 18 * 60 }];
+    const open = generateBookableSlots({
+      windows,
+      timezone: "UTC",
+      format: "interview_me",
+      now,
+      busy: [],
+    });
+    expect(open.map((slot) => slot.startUtc.toISOString())).toContain("2026-09-22T16:00:00.000Z");
+    const blocked = generateBookableSlots({
+      windows,
+      timezone: "UTC",
+      format: "interview_me",
+      now,
+      busy: [{ start: new Date("2026-09-22T16:00:00Z"), end: new Date("2026-09-22T16:30:00Z") }],
+    });
+    expect(blocked.map((slot) => slot.startUtc.toISOString())).not.toContain("2026-09-22T16:00:00.000Z");
+    expect(blocked.map((slot) => slot.startUtc.toISOString())).toContain("2026-09-22T16:30:00.000Z");
   });
 
   it("expires requests after 7 days or when the proposed start has passed", () => {

@@ -2,8 +2,65 @@ import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { analyticsEvents } from "@/lib/analytics/taxonomy";
 import { notify, track } from "@/lib/analytics/track";
+import { productConfig } from "@/lib/config/product";
 import { getDb, getNow } from "@/lib/db";
 import { calendarConnections, jobs, practiceSessions, user } from "@/lib/db/schema";
+
+export async function enqueueJob(
+  type: string,
+  runAt: Date,
+  idempotencyKey: string,
+  payload: Record<string, unknown>
+) {
+  const db = await getDb();
+  const now = await getNow();
+  await db
+    .insert(jobs)
+    .values({
+      id: nanoid(),
+      type,
+      runAt,
+      status: "queued",
+      idempotencyKey,
+      payloadJson: payload,
+      createdAt: now,
+    })
+    .onConflictDoNothing();
+}
+
+export async function scheduleSessionReminders(sessionId: string, startUtc: Date, endUtc: Date) {
+  const now = await getNow();
+  const db = await getDb();
+  const queued = await db.select().from(jobs);
+  for (const job of queued) {
+    if (job.status === "queued" && job.type === "reminder" && job.payloadJson.sessionId === sessionId) {
+      await db.update(jobs).set({ status: "cancelled" }).where(eq(jobs.id, job.id));
+    }
+  }
+  const stamp = startUtc.toISOString();
+  await enqueueJob("reminder", new Date(startUtc.getTime() - 24 * 60 * 60 * 1000), `remind-24h:${sessionId}:${stamp}`, {
+    sessionId,
+    kind: "24h",
+    startUtc: stamp,
+  });
+  await enqueueJob("reminder", new Date(startUtc.getTime() - 60 * 60 * 1000), `remind-1h:${sessionId}:${stamp}`, {
+    sessionId,
+    kind: "1h",
+    startUtc: stamp,
+  });
+  await enqueueJob(
+    "reminder",
+    new Date(startUtc.getTime() - productConfig.joinWindowBeforeMinutes * 60 * 1000),
+    `remind-15m:${sessionId}:${stamp}`,
+    { sessionId, kind: "15m", startUtc: stamp }
+  );
+  await enqueueJob("reminder", new Date(endUtc.getTime() + 15 * 60 * 1000), `feedback:${sessionId}:${stamp}`, {
+    sessionId,
+    kind: "feedback",
+    startUtc: stamp,
+  });
+  void now;
+}
 
 export async function processJobs() {
   const db = await getDb();
@@ -20,7 +77,11 @@ export async function processJobs() {
         await provisionMeet(String(job.payloadJson.sessionId));
       }
       if (job.type === "reminder") {
-        await sendReminder(String(job.payloadJson.sessionId), String(job.payloadJson.kind));
+        await sendReminder(
+          String(job.payloadJson.sessionId),
+          String(job.payloadJson.kind),
+          job.payloadJson.startUtc ? String(job.payloadJson.startUtc) : undefined
+        );
       }
       await db.update(jobs).set({ status: "done" }).where(eq(jobs.id, job.id));
     } catch (error) {
@@ -99,10 +160,11 @@ async function provisionMeet(sessionId: string) {
   }
 }
 
-async function sendReminder(sessionId: string, kind: string) {
+async function sendReminder(sessionId: string, kind: string, expectedStart?: string) {
   const db = await getDb();
   const [session] = await db.select().from(practiceSessions).where(eq(practiceSessions.id, sessionId));
   if (!session || session.state === "cancelled") return;
+  if (expectedStart && session.startUtc.toISOString() !== expectedStart) return;
   const title =
     kind === "feedback"
       ? "How did practice go?"

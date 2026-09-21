@@ -107,6 +107,15 @@ export async function saveProfileSetup(input: {
   );
 }
 
+export async function removeAvailabilityWindow(windowId: string) {
+  const current = await requireMarketplaceUser();
+  const db = await getDb();
+  await db
+    .delete(availabilityWindows)
+    .where(and(eq(availabilityWindows.id, windowId), eq(availabilityWindows.userId, current.id)));
+  await markMeaningful(current.id);
+}
+
 export async function saveAvailability(windows: { weekday: number; startMinutes: number; endMinutes: number }[]) {
   const current = await requireMarketplaceUser();
   const db = await getDb();

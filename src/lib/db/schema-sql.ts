@@ -252,4 +252,6 @@ CREATE TABLE IF NOT EXISTS time_overrides (
   id text PRIMARY KEY DEFAULT 'global',
   now_iso text
 );
+ALTER TABLE practice_sessions ADD COLUMN IF NOT EXISTS pending_reschedule_start_utc timestamptz;
+ALTER TABLE practice_sessions ADD COLUMN IF NOT EXISTS pending_reschedule_by text;
 `;

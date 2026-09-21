@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import { analyticsEvents } from "@/lib/analytics/taxonomy";
 import { markMeaningful, notify, track } from "@/lib/analytics/track";
 import { requireMarketplaceUser } from "@/lib/auth/session";
+import { productConfig } from "@/lib/config/product";
 import { getDb, getNow } from "@/lib/db";
 import {
   conversations,
@@ -11,8 +12,15 @@ import {
   practiceSessions,
   profiles,
 } from "@/lib/db/schema";
-import { attendanceOutcome, isJoinWindowOpen } from "@/lib/domain/scheduling";
-import { pairAllowed } from "@/lib/server/safety";
+import {
+  attendanceOutcome,
+  isJoinWindowOpen,
+  rangesOverlap,
+  sessionDurationMinutes,
+} from "@/lib/domain/scheduling";
+import type { RequestFormat } from "@/lib/domain/types";
+import { enqueueJob, processJobs, scheduleSessionReminders } from "@/lib/server/jobs";
+import { activeSessionBusyRanges, calendarBusyRanges, pairAllowed } from "@/lib/server/safety";
 
 function pairIds(a: string, b: string) {
   return a < b ? [a, b] : [b, a];
@@ -71,7 +79,7 @@ export async function sendMessage(otherId: string, body: string) {
     type: "message",
     title: `${current.profile.fullName} sent you a message`,
     body: "Open Messages to continue the conversation.",
-    href: `/messages/${conversation.id}`,
+    href: `/messages?id=${conversation.id}`,
   });
   return { conversationId: conversation.id };
 }
@@ -162,10 +170,138 @@ export async function getSessionDetail(sessionId: string) {
     otherName: people.find((profile) => profile.userId === otherId)?.fullName || "Ally",
     otherId,
     joinOpen,
+    isPast: session.endUtc.getTime() <= now.getTime(),
     canSeeMeet: Boolean(session.meetUrl) && session.meetProvisionState === "ready",
     myAttendance:
       session.requesterId === current.id ? session.requesterAttendance : session.receiverAttendance,
+    iProposedReschedule: session.pendingRescheduleBy === current.id,
+    canRespondToReschedule: Boolean(
+      session.pendingRescheduleStartUtc && session.pendingRescheduleBy && session.pendingRescheduleBy !== current.id
+    ),
+    canProposeReschedule: session.state === "scheduled" && session.startUtc.getTime() > now.getTime(),
   };
+}
+
+async function assertSessionTimeFree(
+  requesterId: string,
+  receiverId: string,
+  start: Date,
+  end: Date,
+  excludeSessionId: string
+) {
+  const busy = [
+    ...(await activeSessionBusyRanges(requesterId, excludeSessionId)),
+    ...(await activeSessionBusyRanges(receiverId, excludeSessionId)),
+    ...(await calendarBusyRanges(requesterId)),
+    ...(await calendarBusyRanges(receiverId)),
+  ];
+  if (busy.some((range) => rangesOverlap(start, end, range.start, range.end))) {
+    throw new Error("That time was just booked. Pick another time that still works.");
+  }
+}
+
+export async function proposeReschedule(sessionId: string, startIso: string) {
+  const current = await requireMarketplaceUser();
+  const db = await getDb();
+  const now = await getNow();
+  const [session] = await db.select().from(practiceSessions).where(eq(practiceSessions.id, sessionId));
+  if (!session || (session.requesterId !== current.id && session.receiverId !== current.id)) {
+    throw new Error("You don’t have access to this session.");
+  }
+  if (session.state !== "scheduled") {
+    throw new Error("You can only reschedule a confirmed upcoming session.");
+  }
+  if (session.startUtc.getTime() <= now.getTime()) {
+    throw new Error("This session has already started. Confirm attendance after it ends, or cancel if you need to.");
+  }
+  if (!startIso) throw new Error("Choose a new time.");
+  const start = new Date(startIso);
+  if (Number.isNaN(start.getTime())) throw new Error("That time doesn’t look valid.");
+  const end = new Date(
+    start.getTime() + sessionDurationMinutes(session.format as RequestFormat) * 60 * 1000
+  );
+  const earliest = new Date(now.getTime() + productConfig.minNoticeHours * 60 * 60 * 1000);
+  if (start.getTime() < earliest.getTime()) {
+    throw new Error("Please pick a time at least 24 hours from now.");
+  }
+  await assertSessionTimeFree(session.requesterId, session.receiverId, start, end, session.id);
+  await db
+    .update(practiceSessions)
+    .set({
+      pendingRescheduleStartUtc: start,
+      pendingRescheduleBy: current.id,
+      updatedAt: now,
+    })
+    .where(eq(practiceSessions.id, sessionId));
+  const other = session.requesterId === current.id ? session.receiverId : session.requesterId;
+  await notify({
+    userId: other,
+    type: "reschedule_proposed",
+    title: "A new time was suggested for your session",
+    body: "The original time stays until you accept. Confirm if this works, or keep the current time.",
+    href: `/practice/sessions/${sessionId}`,
+  });
+}
+
+export async function respondToReschedule(sessionId: string, action: "accept" | "decline") {
+  const current = await requireMarketplaceUser();
+  const db = await getDb();
+  const now = await getNow();
+  const [session] = await db.select().from(practiceSessions).where(eq(practiceSessions.id, sessionId));
+  if (!session || (session.requesterId !== current.id && session.receiverId !== current.id)) {
+    throw new Error("You don’t have access to this session.");
+  }
+  if (!session.pendingRescheduleStartUtc || !session.pendingRescheduleBy) {
+    throw new Error("There’s no pending time change on this session.");
+  }
+  if (session.pendingRescheduleBy === current.id) {
+    throw new Error("Wait for your ally to respond, or suggest a different time.");
+  }
+  const other = session.pendingRescheduleBy;
+  if (action === "decline") {
+    await db
+      .update(practiceSessions)
+      .set({ pendingRescheduleStartUtc: null, pendingRescheduleBy: null, updatedAt: now })
+      .where(eq(practiceSessions.id, sessionId));
+    await notify({
+      userId: other,
+      type: "reschedule_declined",
+      title: "Your ally is keeping the original time",
+      body: "The session stays on the calendar as originally confirmed. You can still suggest another time.",
+      href: `/practice/sessions/${sessionId}`,
+    });
+    return;
+  }
+  const start = session.pendingRescheduleStartUtc;
+  const end = new Date(
+    start.getTime() + sessionDurationMinutes(session.format as RequestFormat) * 60 * 1000
+  );
+  await assertSessionTimeFree(session.requesterId, session.receiverId, start, end, session.id);
+  await db
+    .update(practiceSessions)
+    .set({
+      startUtc: start,
+      endUtc: end,
+      pendingRescheduleStartUtc: null,
+      pendingRescheduleBy: null,
+      updatedAt: now,
+    })
+    .where(eq(practiceSessions.id, sessionId));
+  await scheduleSessionReminders(sessionId, start, end);
+  if (session.meetProvisionState !== "ready") {
+    await enqueueJob("provision_meet", now, `meet:${sessionId}:${start.toISOString()}`, { sessionId });
+    await processJobs();
+  }
+  for (const userId of [session.requesterId, session.receiverId]) {
+    await notify({
+      userId,
+      type: "session_rescheduled",
+      title: "Your practice session moved",
+      body: "The same session is confirmed for the new time. Join Session still opens 15 minutes before it starts.",
+      href: `/practice/sessions/${sessionId}`,
+    });
+  }
+  await track(analyticsEvents.session_rescheduled, { userId: current.id });
 }
 
 export async function joinSession(sessionId: string) {

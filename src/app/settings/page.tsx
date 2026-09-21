@@ -7,12 +7,14 @@ import {
   connectCalendarAction,
   deleteAccountAction,
   disconnectCalendarAction,
+  removeAvailabilityAction,
   saveProfileAction,
   testimonialVisibilityAction,
 } from "@/app/actions/app";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Initials } from "@/components/initials";
 import { careerStageLabels } from "@/lib/domain/types";
 
 const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -25,6 +27,15 @@ export default async function SettingsPage() {
     <AppShell name={current.profile.fullName}>
       <h1 className="text-3xl font-semibold">Profile & Settings</h1>
       <form action={saveProfileAction} className="mt-8 space-y-4 rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-6">
+        <input type="hidden" name="next" value="/settings" />
+        <div className="flex items-center gap-4">
+          <Initials name={settings.profile.fullName} photoPath={settings.profile.photoPath} size="lg" />
+          <div className="space-y-2">
+            <Label>Photo (optional)</Label>
+            <Input name="photo" type="file" accept="image/jpeg,image/png,image/webp" />
+            <p className="text-xs text-[#a0a0a0]">JPG, PNG, or WebP under 2 MB. Initials show if you skip this.</p>
+          </div>
+        </div>
         <div className="space-y-2">
           <Label>Full name</Label>
           <Input name="fullName" defaultValue={settings.profile.fullName} required />
@@ -100,13 +111,22 @@ export default async function SettingsPage() {
           <Button type="submit" variant="outline">
             Add window
           </Button>
-          <p className="md:col-span-4 text-sm text-[#a0a0a0]">
-            Current windows:{" "}
-            {settings.windows.length
-              ? settings.windows.map((window) => `${weekdays[window.weekday]} ${Math.floor(window.startMinutes / 60)}:00–${Math.floor(window.endMinutes / 60)}:00`).join(" · ")
-              : "None yet."}
-          </p>
         </form>
+        <div className="mt-4 space-y-2">
+          {settings.windows.length === 0 ? <p className="text-sm text-[#a0a0a0]">None yet.</p> : null}
+          {settings.windows.map((window) => (
+            <form key={window.id} action={removeAvailabilityAction} className="flex items-center justify-between gap-3 text-sm">
+              <input type="hidden" name="windowId" value={window.id} />
+              <p>
+                {weekdays[window.weekday]} {Math.floor(window.startMinutes / 60)}:00–
+                {Math.floor(window.endMinutes / 60)}:00
+              </p>
+              <Button type="submit" variant="ghost" size="sm">
+                Remove
+              </Button>
+            </form>
+          ))}
+        </div>
       </section>
 
       <section className="mt-8 rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-6">

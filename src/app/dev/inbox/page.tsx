@@ -11,7 +11,14 @@ export default async function InboxPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-10">
       <h1 className="text-3xl font-semibold">Development inbox</h1>
-      <p className="mt-2 text-sm text-[#a0a0a0]">Password reset and notification emails land here until a real email provider is connected.</p>
+      <p className="mt-2 text-sm text-[#a0a0a0]">
+        Password reset and notification emails land here until a real email provider is connected. To test Join Session
+        without waiting, use the{" "}
+        <a href="/dev/clock" className="text-[#d4af37]">
+          preview clock
+        </a>
+        .
+      </p>
       <div className="mt-6 space-y-3">
         {rows.map((row) => (
           <article key={row.id} className="rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-4">

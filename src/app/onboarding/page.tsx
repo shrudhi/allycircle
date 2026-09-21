@@ -33,6 +33,11 @@ export default async function OnboardingPage() {
           <Label htmlFor="fullName">Full name</Label>
           <Input id="fullName" name="fullName" required defaultValue={current.profile?.fullName || current.name} />
         </div>
+        <div className="space-y-2">
+          <Label htmlFor="photo">Photo (optional)</Label>
+          <Input id="photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp" />
+          <p className="text-xs text-[#a0a0a0]">JPG, PNG, or WebP under 2 MB. We’ll use your initials if you skip this.</p>
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="stage">Current stage</Label>

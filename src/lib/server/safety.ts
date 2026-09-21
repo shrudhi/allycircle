@@ -17,13 +17,14 @@ export async function pairAllowed(a: string, b: string) {
   return rows.length === 0;
 }
 
-export async function activeSessionBusyRanges(userId: string) {
+export async function activeSessionBusyRanges(userId: string, excludeSessionId?: string) {
   const db = await getDb();
   const rows = await db.select().from(practiceSessions).where(
     or(eq(practiceSessions.requesterId, userId), eq(practiceSessions.receiverId, userId))!
   );
   return rows
     .filter((row) => row.state === "scheduled" || row.state === "awaiting_attendance")
+    .filter((row) => row.id !== excludeSessionId)
     .map((row) => ({ start: row.startUtc, end: row.endUtc }));
 }
 

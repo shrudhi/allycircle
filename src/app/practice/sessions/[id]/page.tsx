@@ -3,10 +3,17 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { getSessionUser } from "@/lib/auth/session";
 import { getSessionDetail } from "@/lib/server/sessions";
-import { attendanceAction, cancelSessionAction } from "@/app/actions/app";
+import { listSlotsForAlly } from "@/lib/server/requests";
+import {
+  attendanceAction,
+  cancelSessionAction,
+  proposeRescheduleAction,
+  respondRescheduleAction,
+} from "@/app/actions/app";
 import { JoinButton } from "@/components/join-button";
 import { Button } from "@/components/ui/button";
 import { formatInTimeZone } from "@/lib/domain/timezone";
+import type { RequestFormat } from "@/lib/domain/types";
 
 export default async function SessionPage({ params }: { params: Promise<{ id: string }> }) {
   const current = await getSessionUser();
@@ -14,13 +21,18 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const { id } = await params;
   const data = await getSessionDetail(id);
   const { session } = data;
+  const slots =
+    data.canProposeReschedule
+      ? await listSlotsForAlly(data.otherId, session.format as RequestFormat, { excludeSessionId: id })
+      : [];
 
   return (
     <AppShell name={current.profile.fullName}>
       <p className="text-xs uppercase tracking-[0.16em] text-[#d4af37]">Session</p>
       <h1 className="mt-2 text-3xl font-semibold">{data.otherName}</h1>
       <p className="mt-2 text-[#a0a0a0]">
-        {session.format === "reciprocal_swap" ? "Reciprocal swap" : "Interview Me"} · {formatInTimeZone(session.startUtc, current.profile.timezone)}
+        {session.format === "reciprocal_swap" ? "Reciprocal swap" : "Interview Me"} ·{" "}
+        {formatInTimeZone(session.startUtc, current.profile.timezone)}
       </p>
       <p className="mt-4 text-sm">
         Room status:{" "}
@@ -30,11 +42,41 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             ? "Connect Google Calendar to prepare your session room"
             : "Your session is confirmed. We’re preparing the room."}
       </p>
+      {session.pendingRescheduleStartUtc ? (
+        <div className="mt-6 rounded-2xl border border-[#d4af37]/40 bg-[#1e1e1e] p-5">
+          <p className="font-medium">Proposed new time</p>
+          <p className="mt-2 text-sm text-[#a0a0a0]">
+            {formatInTimeZone(session.pendingRescheduleStartUtc, current.profile.timezone)}. The original time stays until
+            this is accepted.
+          </p>
+          {data.canRespondToReschedule ? (
+            <div className="mt-4 flex flex-wrap gap-3">
+              <form action={respondRescheduleAction}>
+                <input type="hidden" name="sessionId" value={id} />
+                <input type="hidden" name="action" value="accept" />
+                <Button className="gold-outline">Accept new time</Button>
+              </form>
+              <form action={respondRescheduleAction}>
+                <input type="hidden" name="sessionId" value={id} />
+                <input type="hidden" name="action" value="decline" />
+                <Button variant="ghost">Keep original time</Button>
+              </form>
+            </div>
+          ) : data.iProposedReschedule ? (
+            <p className="mt-3 text-sm text-[#a0a0a0]">Waiting for {data.otherName} to confirm.</p>
+          ) : null}
+        </div>
+      ) : null}
       <div className="mt-6 flex flex-wrap gap-3">
         {data.joinOpen && session.state !== "cancelled" ? <JoinButton sessionId={id} pulse /> : null}
         <Link href={`/messages?to=${data.otherId}`} className="text-sm text-[#d4af37]">
           Message
         </Link>
+        {["completed", "did_not_happen", "cancelled"].includes(session.state) ? (
+          <Link href={`/allies/${data.otherId}/request`} className="text-sm text-[#d4af37]">
+            Practice again
+          </Link>
+        ) : null}
         {session.state === "scheduled" ? (
           <form action={cancelSessionAction}>
             <input type="hidden" name="sessionId" value={id} />
@@ -42,7 +84,37 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
           </form>
         ) : null}
       </div>
-      {session.endUtc.getTime() <= Date.now() || session.state === "awaiting_attendance" || session.state === "completed" || session.state === "did_not_happen" ? (
+      {data.canProposeReschedule ? (
+        <form action={proposeRescheduleAction} className="mt-8 space-y-3 rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-5">
+          <input type="hidden" name="sessionId" value={id} />
+          <p className="font-medium">Reschedule this session</p>
+          <p className="text-sm text-[#a0a0a0]">
+            The same session stays on the calendar until your ally accepts a new time.
+          </p>
+          {slots.length ? (
+            <>
+              <select name="startIso" className="h-9 w-full rounded-lg border border-[#2d2d2d] bg-[#111] px-2 text-sm" required>
+                {slots.map((slot) => (
+                  <option key={slot.startUtc.toISOString()} value={slot.startUtc.toISOString()}>
+                    {formatInTimeZone(slot.startUtc, current.profile.timezone)}
+                  </option>
+                ))}
+              </select>
+              <Button type="submit" variant="outline">
+                Suggest new time
+              </Button>
+            </>
+          ) : (
+            <p className="text-sm text-[#a0a0a0]">
+              No open slots on their published availability. Message them, or wait until they add more windows.
+            </p>
+          )}
+        </form>
+      ) : null}
+      {data.isPast ||
+      session.state === "awaiting_attendance" ||
+      session.state === "completed" ||
+      session.state === "did_not_happen" ? (
         <form action={attendanceAction} className="mt-8 space-y-3 rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-5">
           <input type="hidden" name="sessionId" value={id} />
           <p className="font-medium">Did this session happen?</p>
