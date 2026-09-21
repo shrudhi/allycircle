@@ -8,6 +8,9 @@ import * as schema from "@/lib/db/schema";
 import { SCHEMA_SQL } from "@/lib/db/schema-sql";
 import { timeOverrides } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import dns from "node:dns";
+
+dns.setDefaultResultOrder("ipv4first");
 
 type AppDb =
   | ReturnType<typeof drizzlePglite<typeof schema>>
