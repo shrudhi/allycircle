@@ -23,10 +23,12 @@ export default function LoginPage() {
                 Sign up
               </Link>
             </p>
-            <p className="mt-6 rounded-lg border border-[#2d2d2d] bg-[#161616] p-3 text-xs text-[#a0a0a0]">
-              Local test accounts use password <span className="text-white">Practice123!</span> — for example{" "}
-              <span className="text-white">avery.chen@test.allycircle.local</span>
-            </p>
+            {process.env.NODE_ENV !== "production" ? (
+              <p className="mt-6 rounded-lg border border-[#2d2d2d] bg-[#161616] p-3 text-xs text-[#a0a0a0]">
+                Local test accounts use password <span className="text-white">Practice123!</span> — for example{" "}
+                <span className="text-white">avery.chen@test.allycircle.local</span>
+              </p>
+            ) : null}
           </CardContent>
         </Card>
       </div>

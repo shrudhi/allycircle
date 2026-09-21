@@ -112,7 +112,20 @@ export function AuthForm({
           type="button"
           variant="outline"
           className="h-10 w-full"
-          onClick={() => authClient.signIn.social({ provider: "google", callbackURL: "/home" })}
+          onClick={async () => {
+            setError("");
+            setPending(true);
+            try {
+              const result = await authClient.signIn.social({ provider: "google", callbackURL: "/home" });
+              if (result.error) {
+                setError("Google sign-in didn’t complete. Use a test-user Gmail, or try again in a moment.");
+                setPending(false);
+              }
+            } catch {
+              setError("Google sign-in didn’t complete. Check that this site URL is allowed in Google Cloud.");
+              setPending(false);
+            }
+          }}
         >
           Continue with Google
         </Button>

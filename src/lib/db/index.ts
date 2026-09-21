@@ -27,7 +27,7 @@ async function applySchemaSql(exec: (sql: string) => Promise<void>) {
 
 async function createDb() {
   if (process.env.DATABASE_URL) {
-    const client = postgres(process.env.DATABASE_URL, { max: 4 });
+    const client = postgres(process.env.DATABASE_URL, { max: 4, prepare: false });
     const db = drizzlePg(client, { schema });
     globalForDb.allyApplySchema = async (sqlText: string) => {
       for (const statement of sqlText.split(";").map((part) => part.trim()).filter(Boolean)) {
