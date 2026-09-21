@@ -16,15 +16,25 @@ type AppDb =
 const globalForDb = globalThis as unknown as {
   allyDb?: AppDb;
   allyReady?: Promise<AppDb>;
+  allyApplySchema?: (sql: string) => Promise<void>;
+  appliedSchemaSql?: string;
 };
+
+async function applySchemaSql(exec: (sql: string) => Promise<void>) {
+  await exec(SCHEMA_SQL);
+}
 
 async function createDb() {
   if (process.env.DATABASE_URL) {
     const client = postgres(process.env.DATABASE_URL, { max: 4 });
     const db = drizzlePg(client, { schema });
-    for (const statement of SCHEMA_SQL.split(";").map((part) => part.trim()).filter(Boolean)) {
-      await client.unsafe(statement);
-    }
+    globalForDb.allyApplySchema = async (sqlText: string) => {
+      for (const statement of sqlText.split(";").map((part) => part.trim()).filter(Boolean)) {
+        await client.unsafe(statement);
+      }
+    };
+    await applySchemaSql(globalForDb.allyApplySchema);
+    globalForDb.appliedSchemaSql = SCHEMA_SQL;
     return db;
   }
 
@@ -33,12 +43,15 @@ async function createDb() {
   const pglite = new PGlite(dataDir);
   await pglite.waitReady;
   const db = drizzlePglite(pglite, { schema });
-  await pglite.exec(SCHEMA_SQL);
+  globalForDb.allyApplySchema = async (sqlText: string) => {
+    await pglite.exec(sqlText);
+  };
+  await applySchemaSql(globalForDb.allyApplySchema);
+  globalForDb.appliedSchemaSql = SCHEMA_SQL;
   return db;
 }
 
 export async function getDb() {
-  if (globalForDb.allyDb) return globalForDb.allyDb;
   if (!globalForDb.allyReady) {
     globalForDb.allyReady = createDb().then(async (db) => {
       globalForDb.allyDb = db;
@@ -47,7 +60,12 @@ export async function getDb() {
       return db;
     });
   }
-  return globalForDb.allyReady;
+  const db = globalForDb.allyDb || (await globalForDb.allyReady);
+  if (globalForDb.allyApplySchema && globalForDb.appliedSchemaSql !== SCHEMA_SQL) {
+    await applySchemaSql(globalForDb.allyApplySchema);
+    globalForDb.appliedSchemaSql = SCHEMA_SQL;
+  }
+  return db;
 }
 
 export async function getNow() {
