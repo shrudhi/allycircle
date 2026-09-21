@@ -21,6 +21,9 @@ export const metadata: Metadata = {
     "Find peers in your field, sync schedules, and run mock interviews together.",
 };
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${plusJakarta.variable} ${playfair.variable} dark h-full antialiased`}>

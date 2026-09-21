@@ -26,7 +26,8 @@ async function applySchemaSql(exec: (sql: string) => Promise<void>) {
 }
 
 async function createDb() {
-  if (process.env.DATABASE_URL) {
+  const isBuild = process.env.NEXT_PHASE === "phase-production-build";
+  if (process.env.DATABASE_URL && !isBuild) {
     const client = postgres(process.env.DATABASE_URL, { max: 4, prepare: false });
     const db = drizzlePg(client, { schema });
     globalForDb.allyApplySchema = async (sqlText: string) => {
@@ -59,8 +60,10 @@ export async function getDb() {
       globalForDb.allyDb = db;
       globalForDb.allySeeding = true;
       try {
-        const { seedDevelopmentData } = await import("@/lib/db/seed");
-        await seedDevelopmentData(db);
+        if (process.env.NEXT_PHASE !== "phase-production-build") {
+          const { seedDevelopmentData } = await import("@/lib/db/seed");
+          await seedDevelopmentData(db);
+        }
       } finally {
         globalForDb.allySeeding = false;
       }
