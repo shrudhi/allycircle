@@ -15,12 +15,31 @@ import { ProfileForm } from "@/components/profile-form";
 import { AvailabilityEditor } from "@/components/availability-editor";
 import { Button } from "@/components/ui/button";
 import { suggestedTopics } from "@/lib/config/topics";
+import { isGoogleCalendarConfigured } from "@/lib/integrations/google-calendar";
+import { integrationStatus } from "@/lib/integrations/status";
 import Link from "next/link";
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ calendar?: string }>;
+}) {
   const current = await getSessionUser();
   if (!current?.profile) redirect("/login");
   const settings = await mySettings();
+  const { calendar } = await searchParams;
+  const calendarLive = isGoogleCalendarConfigured();
+  const live = integrationStatus();
+  const calendarMessage =
+    calendar === "connected"
+      ? "Google Calendar is connected. We’ll skip busy times and create Meet after a session is confirmed."
+      : calendar === "denied"
+        ? "Google access was declined. You can try again when you’re ready."
+        : calendar === "failed"
+          ? "We couldn’t finish the Google Calendar handshake. Try again, or reconnect after removing AllyCircle from your Google account."
+          : calendar === "not_configured"
+            ? "Google Calendar keys are not on this server yet. Add them to the environment, or use preview mode locally."
+            : null;
   return (
     <AppShell name={current.profile.fullName}>
       <h1 className="font-serif text-4xl">Profile & Settings</h1>
@@ -72,18 +91,36 @@ export default async function SettingsPage() {
       <section id="calendar" className="mt-8 rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-6">
         <h2 className="font-serif text-2xl">Calendar connection</h2>
         <p className="mt-2 text-sm text-[#a0a0a0]">
-          Google login and Calendar are separate. Connecting Calendar lets us check when you’re busy and create the Meet invite after a session is confirmed.
+          Google login and Calendar are separate. Connecting Calendar lets us read free/busy and create a real Google Meet after a session is confirmed.
         </p>
-        <p className="mt-3 text-sm">Status: {settings.calendar?.status === "connected" ? "Connected" : "Not connected"}</p>
+        <p className="mt-3 text-sm">
+          Status: {settings.calendar?.status === "connected" ? "Connected" : "Not connected"}
+          {calendarLive ? " · live Google API" : " · preview mode"}
+        </p>
+        {calendarMessage ? <p className="mt-3 text-sm text-[#d4af37]">{calendarMessage}</p> : null}
         {settings.calendar?.status === "connected" ? (
           <form action={disconnectCalendarAction} className="mt-4">
             <Button variant="outline">Disconnect Calendar</Button>
           </form>
+        ) : calendarLive ? (
+          <Link href="/api/calendar/google/start" className="mt-4 inline-flex h-10 items-center rounded-lg bg-[#d4af37] px-4 text-sm font-medium text-black">
+            Connect Google Calendar
+          </Link>
         ) : (
           <form action={connectCalendarAction} className="mt-4">
-            <Button className="gold-outline">Connect Google Calendar (preview)</Button>
+            <Button className="gold-outline">Connect Calendar (preview)</Button>
           </form>
         )}
+      </section>
+
+      <section className="mt-8 rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-6">
+        <h2 className="font-serif text-2xl">Production integrations</h2>
+        <ul className="mt-4 space-y-2 text-sm text-[#b3b3b3]">
+          <li>Database: {live.database === "hosted" ? "DATABASE_URL (hosted Postgres)" : "local PGlite — set DATABASE_URL for production"}</li>
+          <li>Google login: {live.googleLogin ? "configured" : "set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET"}</li>
+          <li>Google Calendar / Meet: {live.googleCalendar ? "configured" : "same Google client, plus Calendar API and redirect /api/calendar/google/callback"}</li>
+          <li>Email: {live.email ? "Resend is sending" : "set RESEND_API_KEY (and EMAIL_FROM) — until then mail stays in /dev/inbox"}</li>
+        </ul>
       </section>
 
       <section className="mt-8 rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-6">

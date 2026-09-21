@@ -14,6 +14,7 @@ import {
   twoWayEndFromStart,
 } from "@/lib/domain/scheduling";
 import { isRequestExpired, isTakingABreak } from "@/lib/domain/types";
+import { encryptSecret, decryptSecret } from "@/lib/crypto/secrets";
 
 const pm = {
   fieldId: "product-management",
@@ -256,5 +257,12 @@ describe("scheduling and sessions", () => {
         now: new Date("2026-09-08T00:00:00Z"),
       })
     ).toBe(true);
+  });
+});
+
+describe("secret encryption", () => {
+  it("round-trips calendar tokens", () => {
+    const token = "refresh-token-example";
+    expect(decryptSecret(encryptSecret(token))).toBe(token);
   });
 });

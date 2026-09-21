@@ -198,9 +198,22 @@ export async function disconnectCalendar() {
   const current = await requireMarketplaceUser();
   const db = await getDb();
   const now = await getNow();
+  try {
+    const { revokeGoogleCalendar } = await import("@/lib/integrations/google-calendar");
+    await revokeGoogleCalendar(current.id);
+  } catch {
+    // Still disconnect locally if Google revoke fails.
+  }
   await db
     .update(calendarConnections)
-    .set({ status: "revoked", organizerEligible: false, revokedAt: now, updatedAt: now })
+    .set({
+      status: "revoked",
+      organizerEligible: false,
+      encryptedRefreshToken: null,
+      encryptedAccessToken: null,
+      revokedAt: now,
+      updatedAt: now,
+    })
     .where(eq(calendarConnections.userId, current.id));
   await track(analyticsEvents.calendar_disconnected, { userId: current.id });
 }

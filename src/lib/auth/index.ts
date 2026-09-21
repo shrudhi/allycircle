@@ -7,15 +7,17 @@ import { notify, track } from "@/lib/analytics/track";
 import { analyticsEvents } from "@/lib/analytics/taxonomy";
 import { emailVerificationRequired } from "@/lib/auth/email-policy";
 import { eq } from "drizzle-orm";
+import { isGoogleLoginConfigured } from "@/lib/integrations/google-calendar";
+import { appUrl } from "@/lib/integrations/app-url";
 
 let authInstance: ReturnType<typeof createAuth> | undefined;
 
 function origin() {
-  return process.env.NEXT_PUBLIC_APP_URL || "http://127.0.0.1:43131";
+  return appUrl();
 }
 
 function createAuth(db: Awaited<ReturnType<typeof getDb>>) {
-  const googleConfigured = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+  const googleConfigured = isGoogleLoginConfigured();
   return betterAuth({
     secret: process.env.AUTH_SECRET || "allycircle-dev-secret-change-me",
     baseURL: origin(),
@@ -25,7 +27,7 @@ function createAuth(db: Awaited<ReturnType<typeof getDb>>) {
     }),
     emailAndPassword: {
       enabled: true,
-      requireEmailVerification: process.env.NODE_ENV === "production",
+      requireEmailVerification: emailVerificationRequired(),
       sendResetPassword: async ({ user, url }) => {
         await notify({
           userId: user.id,
@@ -77,13 +79,18 @@ function createAuth(db: Awaited<ReturnType<typeof getDb>>) {
           },
         },
         plugins: [nextCookies()],
-    trustedOrigins: [
-      origin(),
-      "http://localhost:43131",
-      "http://127.0.0.1:43131",
-      "http://0.0.0.0:43131",
-      "http://172.30.0.2:43131",
-    ],
+    trustedOrigins: Array.from(
+      new Set(
+        [
+          origin(),
+          "http://localhost:43131",
+          "http://127.0.0.1:43131",
+          "http://0.0.0.0:43131",
+          "http://172.30.0.2:43131",
+          ...(process.env.AUTH_TRUSTED_ORIGINS || "").split(",").map((item) => item.trim()).filter(Boolean),
+        ]
+      )
+    ),
   });
 }
 
@@ -94,6 +101,4 @@ export async function getAuth() {
   return authInstance;
 }
 
-export function isGoogleLoginConfigured() {
-  return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
-}
+export { isGoogleLoginConfigured };

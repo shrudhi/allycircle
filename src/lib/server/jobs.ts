@@ -132,13 +132,36 @@ async function provisionMeet(sessionId: string) {
     });
     return;
   }
-  const meetUrl = `https://meet.google.com/ally-${nanoid(8).toLowerCase()}`;
+  let meetUrl = "";
+  let calendarEventId = `evt_${nanoid()}`;
+  if (organizer.encryptedRefreshToken || organizer.encryptedAccessToken) {
+    const { createGoogleMeetEvent } = await import("@/lib/integrations/google-calendar");
+    const people = await db.select().from(user);
+    const emails = [session.requesterId, session.receiverId]
+      .map((id) => people.find((row) => row.id === id)?.email)
+      .filter(Boolean) as string[];
+    const created = await createGoogleMeetEvent({
+      organizerUserId: organizer.userId,
+      attendeeEmails: emails,
+      title: "AllyCircle interview session",
+      description: "Booked through AllyCircle. Join from the Calendar invite or from your session page when the window opens.",
+      startUtc: session.startUtc,
+      endUtc: session.endUtc,
+    });
+    if (!created?.meetUrl) {
+      throw new Error("Google Calendar did not return a Meet link yet.");
+    }
+    meetUrl = created.meetUrl;
+    calendarEventId = created.eventId || calendarEventId;
+  } else {
+    meetUrl = `https://meet.google.com/ally-${nanoid(8).toLowerCase()}`;
+  }
   await db
     .update(practiceSessions)
     .set({
       meetUrl,
       meetProvisionState: "ready",
-      calendarEventId: `evt_${nanoid()}`,
+      calendarEventId,
       calendarOrganizerUserId: organizer.userId,
       updatedAt: now,
     })

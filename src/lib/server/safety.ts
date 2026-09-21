@@ -36,6 +36,14 @@ export async function calendarBusyRanges(userId: string) {
     .where(eq(calendarConnections.userId, userId))
     .limit(1);
   if (!connection || connection.status !== "connected") return [];
+  if (connection.encryptedRefreshToken || connection.encryptedAccessToken) {
+    try {
+      const { googleFreeBusyRanges } = await import("@/lib/integrations/google-calendar");
+      return await googleFreeBusyRanges(userId);
+    } catch {
+      return [];
+    }
+  }
   if (connection.mockBusyJson) {
     try {
       const parsed = JSON.parse(connection.mockBusyJson) as { start: string; end: string }[];

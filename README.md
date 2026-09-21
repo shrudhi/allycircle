@@ -43,6 +43,18 @@ Development-only tools:
 - `/internal/metrics` — funnel and product health
 - `/record` — interviews given, pending requests, notes, and testimonial visibility
 
+## Real-world integrations
+
+Copy `.env.example` to `.env.local` (or your host’s secret store). Until a key is set, that slice stays on the local fallback so development still works.
+
+1. **Database** — set `DATABASE_URL` to Postgres/Supabase. Without it, the app uses embedded PGlite in `.data/`.
+2. **Google login** — create an OAuth client. Authorized redirect: `{NEXT_PUBLIC_APP_URL}/api/auth/callback/google`. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+3. **Google Calendar + Meet** — enable Calendar API on the same (or a dedicated) OAuth client. Authorized redirect: `{NEXT_PUBLIC_APP_URL}/api/calendar/google/callback`. Scopes: `calendar.events`, `calendar.freebusy`. Connect from Settings → Calendar. After a session is confirmed we create a Calendar event with a Meet link and skip busy times when booking.
+4. **Email** — set `RESEND_API_KEY` and `EMAIL_FROM`. Verification, resets, and session mail then send through Resend. Without it, messages land in `/dev/inbox`.
+5. **Jobs** — Meet provisioning and reminders run from `/api/jobs`. Logged-in clients poll it; in production also set `CRON_SECRET` and hit that path on a schedule (Vercel cron is included).
+
+Set `NEXT_PUBLIC_APP_URL` and `AUTH_SECRET` before any public deploy. Replace the Terms/Privacy placeholders with counsel-reviewed copy.
+
 ## What is mocked until you connect accounts
 
 Do **not** paste secrets into chat. Put them in `.env.local` or your host’s secret settings.

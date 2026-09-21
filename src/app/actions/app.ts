@@ -32,6 +32,7 @@ import { saveProfilePhoto } from "@/lib/server/photos";
 import { requireSessionUser } from "@/lib/auth/session";
 import { setNowOverride } from "@/lib/db";
 import type { ReportReason } from "@/lib/domain/types";
+import { isGoogleCalendarConfigured } from "@/lib/integrations/google-calendar";
 
 export async function saveProfileAction(formData: FormData) {
   const topics = formData.getAll("topics").map(String).map((item) => item.trim()).filter(Boolean);
@@ -219,6 +220,9 @@ export async function setClockAction(formData: FormData) {
 }
 
 export async function connectCalendarAction() {
+  if (isGoogleCalendarConfigured()) {
+    redirect("/api/calendar/google/start");
+  }
   await connectMockCalendar();
   revalidatePath("/settings");
 }

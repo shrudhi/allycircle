@@ -62,11 +62,19 @@ export async function notify(input: {
       href: input.href,
       createdAt: now,
     });
-    if (process.env.RESEND_API_KEY) {
-      // Real sending can be wired here without changing product state.
-      console.info(`[email] ${input.email.to}: ${input.email.subject}`);
-    } else {
-      console.info(`[dev-email] to=${input.email.to} subject=${input.email.subject}`);
+    try {
+      const { sendTransactionalEmail } = await import("@/lib/integrations/email");
+      const result = await sendTransactionalEmail({
+        to: input.email.to,
+        subject: input.email.subject,
+        body: input.body,
+        href: input.href,
+      });
+      if (!result.sent) {
+        console.info(`[dev-email] to=${input.email.to} subject=${input.email.subject}`);
+      }
+    } catch (error) {
+      console.error("[email] send failed", error instanceof Error ? error.message : error);
     }
   }
 }
