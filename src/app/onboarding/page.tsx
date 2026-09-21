@@ -18,6 +18,7 @@ export default async function OnboardingPage() {
         <h1 className="mt-2 text-2xl font-semibold">A few details so we can introduce you</h1>
         <p className="mt-2 text-sm text-[#a0a0a0]">
           We match you with people in the same kind of work. Skip anything you don’t want to share — we never invent missing details.
+          After you save, you’ll reach Home. Google Calendar is under your avatar → Profile & Settings. It is not on this first screen on purpose: we need your profile saved first.
         </p>
         <div className="mt-8">
           <ProfileForm

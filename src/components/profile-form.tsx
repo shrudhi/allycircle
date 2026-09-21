@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,6 +11,7 @@ import { TimezoneSelect } from "@/components/timezone-select";
 import { Initials } from "@/components/initials";
 import { careerStageLabels } from "@/lib/domain/types";
 import { interviewPaceOptions } from "@/lib/domain/copy";
+import { cn } from "@/lib/utils";
 
 type JobRow = { company: string; title: string; year: string };
 type SchoolRow = { school: string; degree: string; course: string };
@@ -186,9 +187,9 @@ export function ProfileForm({
         <MultiSearchSelect name="topics" options={topicOptions} defaultValues={values.topics} placeholder="Add a topic" />
       </div>
       {state?.error ? <p className="text-sm text-[#e07070]">{state.error}</p> : null}
-      <Button type="submit" className="h-10 gold-outline" disabled={pending}>
+      <button type="submit" className={cn(buttonVariants({ size: "lg" }), "gold-outline h-11 px-6")} disabled={pending}>
         {pending ? "Saving…" : submitLabel}
-      </Button>
+      </button>
     </form>
   );
 }

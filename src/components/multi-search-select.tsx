@@ -59,7 +59,10 @@ export function MultiSearchSelect({
           </button>
         ))}
         <Popover open={open} onOpenChange={setOpen}>
-          <PopoverTrigger className="rounded-full border border-dashed border-[#2d2d2d] px-3 py-1 text-xs text-[#a0a0a0]">
+          <PopoverTrigger
+            type="button"
+            className="rounded-full border border-dashed border-[#2d2d2d] px-3 py-1 text-xs text-[#a0a0a0]"
+          >
             {placeholder}
           </PopoverTrigger>
           <PopoverContent align="start" className="min-w-64 p-2">
