@@ -1,10 +1,8 @@
-import { hashPassword } from "better-auth/crypto";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { professionalFields } from "@/lib/config/fields";
 import { topicsForField } from "@/lib/config/topics";
 import {
-  account,
   availabilityWindows,
   profiles,
   user,
@@ -14,9 +12,9 @@ import type { getDb } from "@/lib/db";
 
 type Db = Awaited<ReturnType<typeof getDb>>;
 
-const TEST_PASSWORD = "Practice123!";
+export const TEST_PASSWORD = "Practice123!";
 
-const people = [
+export const testPeople = [
   { email: "avery.chen@test.allycircle.local", name: "Avery Chen (Test)", fieldId: "product-management", title: "Senior Product Manager", company: "Northwind", years: 7, topics: ["Product strategy", "Product sense"] },
   { email: "jordan.patel@test.allycircle.local", name: "Jordan Patel (Test)", fieldId: "product-management", title: "Product Manager", company: "Brightline", years: 5, topics: ["Execution / delivery"] },
   { email: "sam.okonkwo@test.allycircle.local", name: "Sam Okonkwo (Test)", fieldId: "product-management", title: "Principal PM", company: "Harbor", years: 10, topics: ["Product strategy", "Behavioral"] },
@@ -37,33 +35,29 @@ export async function seedDevelopmentData(db: Db) {
   if (process.env.NODE_ENV === "production" && process.env.ALLOW_TEST_SEED !== "true") {
     return;
   }
-  const existing = await db.select().from(user).where(eq(user.email, people[0].email)).limit(1);
-  if (existing.length) return;
-
-  const passwordHash = await hashPassword(TEST_PASSWORD);
+  const existing = await db.select().from(user).where(eq(user.email, testPeople[0].email)).limit(1);
+  const { getAuth } = await import("@/lib/auth");
+  const auth = await getAuth();
   const now = new Date();
 
-  for (const [index, person] of people.entries()) {
-    const id = nanoid();
-    await db.insert(user).values({
-      id,
-      name: person.name,
-      email: person.email,
-      emailVerified: true,
-      createdAt: now,
-      updatedAt: now,
-    });
-    await db.insert(account).values({
-      id: nanoid(),
-      accountId: person.email,
-      providerId: "credential",
-      userId: id,
-      password: passwordHash,
-      createdAt: now,
-      updatedAt: now,
-    });
+  for (const [index, person] of testPeople.entries()) {
+    let [account] = await db.select().from(user).where(eq(user.email, person.email)).limit(1);
+    if (!account) {
+      const created = await auth.api.signUpEmail({
+        body: {
+          email: person.email,
+          password: TEST_PASSWORD,
+          name: person.name,
+        },
+      });
+      const userId = created.user.id;
+      await db.update(user).set({ emailVerified: true, updatedAt: now }).where(eq(user.id, userId));
+      account = { ...(created.user as { id: string; name: string; email: string; emailVerified: boolean; image?: string | null }), createdAt: now, updatedAt: now, deletedAt: null };
+    }
+    const [profile] = await db.select().from(profiles).where(eq(profiles.userId, account.id)).limit(1);
+    if (profile) continue;
     await db.insert(profiles).values({
-      userId: id,
+      userId: account.id,
       fullName: person.name,
       stage: "working_professional",
       fieldId: person.fieldId,
@@ -84,31 +78,31 @@ export async function seedDevelopmentData(db: Db) {
       const topic = topicsForField(person.fieldId).find((item) => item.label === label);
       await db.insert(userTopics).values({
         id: nanoid(),
-        userId: id,
+        userId: account.id,
         topicId: topic?.id,
         label,
       });
     }
     await db.insert(availabilityWindows).values({
       id: nanoid(),
-      userId: id,
+      userId: account.id,
       weekday: 2,
       startMinutes: 18 * 60,
       endMinutes: 21 * 60,
     });
     await db.insert(availabilityWindows).values({
       id: nanoid(),
-      userId: id,
+      userId: account.id,
       weekday: 4,
       startMinutes: 12 * 60,
       endMinutes: 14 * 60,
     });
   }
 
-  console.info(
-    `[seed] Loaded ${people.length} labelled test allies. Password for all: ${TEST_PASSWORD}`
-  );
-  console.info(
-    `[seed] Professional fields available: ${professionalFields.map((field) => field.label).join(", ")}`
-  );
+  if (!existing.length) {
+    console.info(`[seed] Loaded labelled test allies. Password for all: ${TEST_PASSWORD}`);
+    console.info(
+      `[seed] Professional fields available: ${professionalFields.map((field) => field.label).join(", ")}`
+    );
+  }
 }
