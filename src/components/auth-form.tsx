@@ -41,7 +41,15 @@ export function AuthForm({
           callbackURL: "/onboarding",
         });
         if (result.error) {
-          setError("We couldn’t create that account. Try a different email or log in.");
+          const code = (result.error as { code?: string }).code || "";
+          const message = result.error.message || "";
+          if (code === "USER_ALREADY_EXISTS" || /already exists|already registered/i.test(message)) {
+            setError("That email already has an account. Use Log in instead.");
+          } else if (/database|connect|timeout|ECONN/i.test(message)) {
+            setError("The live database isn’t connected yet. Add DATABASE_URL in Vercel and redeploy.");
+          } else {
+            setError("We couldn’t create that account. Use a new email, a password of at least 8 characters, and tick the terms box.");
+          }
           setPending(false);
           return;
         }

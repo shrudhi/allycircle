@@ -67,13 +67,17 @@ function createAuth(db: Awaited<ReturnType<typeof getDb>>) {
           user: {
             create: {
               after: async (created) => {
-                if (!emailVerificationRequired()) {
-                  await db
-                    .update(schema.user)
-                    .set({ emailVerified: true, updatedAt: new Date() })
-                    .where(eq(schema.user.id, created.id));
+                try {
+                  if (!emailVerificationRequired()) {
+                    await db
+                      .update(schema.user)
+                      .set({ emailVerified: true, updatedAt: new Date() })
+                      .where(eq(schema.user.id, created.id));
+                  }
+                  await track(analyticsEvents.auth_signed_up, { userId: created.id });
+                } catch (error) {
+                  console.error("[auth] post-signup hook failed", error);
                 }
-                await track(analyticsEvents.auth_signed_up, { userId: created.id });
               },
             },
           },
