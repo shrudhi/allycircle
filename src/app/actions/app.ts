@@ -89,14 +89,19 @@ export async function toggleSaveAction(allyId: string) {
   revalidatePath(`/allies/${allyId}`);
 }
 
-export async function sendRequestAction(formData: FormData) {
-  const result = await createPracticeRequest({
-    allyId: String(formData.get("allyId")),
-    message: String(formData.get("message") || ""),
-    startIso: String(formData.get("startIso") || "") || undefined,
-    openToTwoWay: formData.get("openToTwoWay") === "on",
-  });
-  redirect(`/practice/requests/${result.id}`);
+export async function sendRequestAction(_prev: { error?: string } | null, formData: FormData) {
+  try {
+    const result = await createPracticeRequest({
+      allyId: String(formData.get("allyId")),
+      message: String(formData.get("message") || ""),
+      startIso: String(formData.get("startIso") || "") || undefined,
+      openToTwoWay: formData.get("openToTwoWay") === "on",
+    });
+    redirect(`/practice/requests/${result.id}`);
+  } catch (error) {
+    if (typeof error === "object" && error && "digest" in error) throw error;
+    return { error: error instanceof Error ? error.message : "We couldn’t send that request. Try another time." };
+  }
 }
 
 export async function respondAction(formData: FormData) {

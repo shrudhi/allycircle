@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { useActionState, useEffect, useMemo, useState } from "react";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export type BookableSlotView = {
   startIso: string;
@@ -29,7 +30,7 @@ export function RequestForm({
   canSwap,
   interviewSlots,
 }: {
-  action: (formData: FormData) => void | Promise<void>;
+  action: (state: { error?: string } | null, formData: FormData) => Promise<{ error?: string } | null>;
   allyId: string;
   canSwap: boolean;
   interviewSlots: BookableSlotView[];
@@ -43,20 +44,29 @@ export function RequestForm({
     }
     return map;
   }, [interviewSlots]);
-  const [cursor, setCursor] = useState(() => {
-    const now = new Date();
-    return { year: now.getFullYear(), month: now.getMonth() };
-  });
+  const [ready, setReady] = useState(false);
+  const [cursor, setCursor] = useState({ year: 2026, month: 8 });
   const [dateKey, setDateKey] = useState("");
   const [startIso, setStartIso] = useState("");
+  const [state, formAction, pending] = useActionState(action, null);
   const times = dateKey ? byDate.get(dateKey) || [] : [];
   const title = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(
     new Date(cursor.year, cursor.month, 1)
   );
   const cells = monthCells(cursor.year, cursor.month);
 
+  useEffect(() => {
+    const now = new Date();
+    setCursor({ year: now.getFullYear(), month: now.getMonth() });
+    setReady(true);
+  }, []);
+
+  if (!ready) {
+    return <p className="mt-8 text-sm text-[#b3b3b3]">Loading calendar…</p>;
+  }
+
   return (
-    <form action={action} className="mt-8 space-y-8 rounded-2xl border border-white/10 bg-[#141414] p-6">
+    <form action={formAction} className="mt-8 space-y-8 rounded-2xl border border-white/10 bg-[#141414] p-6">
       <input type="hidden" name="allyId" value={allyId} />
       <input type="hidden" name="startIso" value={startIso} />
       <div>
@@ -163,9 +173,14 @@ export function RequestForm({
           placeholder="Interview stage, company, or topic (optional)"
         />
       </div>
-      <Button type="submit" className="gold-outline h-11 px-6" disabled={!startIso}>
-        Send request
-      </Button>
+      {state?.error ? <p className="text-sm text-[#e07070]">{state.error}</p> : null}
+      <button
+        type="submit"
+        className={cn(buttonVariants({ size: "lg" }), "gold-outline h-11 px-6")}
+        disabled={!startIso || pending}
+      >
+        {pending ? "Sending…" : "Send request"}
+      </button>
     </form>
   );
 }
