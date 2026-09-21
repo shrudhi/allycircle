@@ -18,6 +18,8 @@ export const testPeople = [
   { email: "avery.chen@test.allycircle.local", name: "Avery Chen (Test)", fieldId: "product-management", title: "Senior Product Manager", company: "Northwind", years: 7, topics: ["Product strategy", "Product sense"] },
   { email: "jordan.patel@test.allycircle.local", name: "Jordan Patel (Test)", fieldId: "product-management", title: "Product Manager", company: "Brightline", years: 5, topics: ["Execution / delivery"] },
   { email: "sam.okonkwo@test.allycircle.local", name: "Sam Okonkwo (Test)", fieldId: "product-management", title: "Principal PM", company: "Harbor", years: 10, topics: ["Product strategy", "Behavioral"] },
+  { email: "priya.mehta@test.allycircle.local", name: "Priya Mehta (Test)", fieldId: "product-management", title: "Director of Product", company: "Summit", years: 14, topics: ["Product strategy", "Leadership"] },
+  { email: "arjun.rao@test.allycircle.local", name: "Arjun Rao (Test)", fieldId: "product-management", title: "VP Product", company: "Helios", years: 18, topics: ["Product strategy", "Product sense"] },
   { email: "riley.nguyen@test.allycircle.local", name: "Riley Nguyen (Test)", fieldId: "product-management", title: "PM", company: "Lumen", years: 3, topics: [] },
   { email: "casey.brooks@test.allycircle.local", name: "Casey Brooks (Test)", fieldId: "product-management", title: "Group PM", company: "Atlas", years: 8, topics: ["Metrics & experimentation"] },
   { email: "morgan.das@test.allycircle.local", name: "Morgan Das (Test)", fieldId: "product-management", title: "Product Lead", company: "Keel", years: 6, topics: ["Product sense"] },
@@ -32,7 +34,7 @@ export const testPeople = [
 ];
 
 export async function seedDevelopmentData(db: Db) {
-  if (process.env.NODE_ENV === "production" && process.env.ALLOW_TEST_SEED !== "true") {
+  if (process.env.BLOCK_DEMO_SEED === "true") {
     return;
   }
   const existing = await db.select().from(user).where(eq(user.email, testPeople[0].email)).limit(1);
@@ -41,23 +43,21 @@ export async function seedDevelopmentData(db: Db) {
   for (const [index, person] of testPeople.entries()) {
     let [account] = await db.select().from(user).where(eq(user.email, person.email)).limit(1);
     if (!account) {
-      const { getAuth } = await import("@/lib/auth");
-      const auth = await getAuth();
-      const created = await auth.api.signUpEmail({
-        body: {
-          email: person.email,
-          password: TEST_PASSWORD,
-          name: person.name,
-        },
-      });
-      const userId = created.user.id;
-      await db.update(user).set({ emailVerified: true, updatedAt: now }).where(eq(user.id, userId));
-      account = {
-        id: created.user.id,
-        name: created.user.name,
-        email: created.user.email,
+      const userId = nanoid();
+      await db.insert(user).values({
+        id: userId,
+        name: person.name,
+        email: person.email,
         emailVerified: true,
-        image: created.user.image ?? null,
+        createdAt: now,
+        updatedAt: now,
+      });
+      account = {
+        id: userId,
+        name: person.name,
+        email: person.email,
+        emailVerified: true,
+        image: null,
         createdAt: now,
         updatedAt: now,
         deletedAt: null,
