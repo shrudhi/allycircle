@@ -5,6 +5,8 @@ import { getDb } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { notify, track } from "@/lib/analytics/track";
 import { analyticsEvents } from "@/lib/analytics/taxonomy";
+import { emailVerificationRequired } from "@/lib/auth/email-policy";
+import { eq } from "drizzle-orm";
 
 let authInstance: ReturnType<typeof createAuth> | undefined;
 let authReady: Promise<ReturnType<typeof createAuth>> | undefined;
@@ -57,10 +59,25 @@ function createAuth(db: Awaited<ReturnType<typeof getDb>>) {
           },
         }
       : undefined,
-    user: {
-      deleteUser: { enabled: true },
-    },
-    plugins: [nextCookies()],
+        user: {
+          deleteUser: { enabled: true },
+        },
+        databaseHooks: {
+          user: {
+            create: {
+              after: async (created) => {
+                if (!emailVerificationRequired()) {
+                  await db
+                    .update(schema.user)
+                    .set({ emailVerified: true, updatedAt: new Date() })
+                    .where(eq(schema.user.id, created.id));
+                }
+                await track(analyticsEvents.auth_signed_up, { userId: created.id });
+              },
+            },
+          },
+        },
+        plugins: [nextCookies()],
     trustedOrigins: [origin(), "http://localhost:43131", "http://127.0.0.1:43131"],
   });
 }

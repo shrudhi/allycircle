@@ -11,6 +11,7 @@ import { formatInTimeZone } from "@/lib/domain/timezone";
 export default async function HomePage() {
   const current = await getSessionUser();
   if (!current) redirect("/login");
+  if (!current.emailVerified) redirect("/verify-email");
   const data = await getHomeData();
   if (data.needsOnboarding) redirect("/onboarding");
   const requests = await listRequests();

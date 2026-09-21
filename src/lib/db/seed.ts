@@ -52,7 +52,16 @@ export async function seedDevelopmentData(db: Db) {
       });
       const userId = created.user.id;
       await db.update(user).set({ emailVerified: true, updatedAt: now }).where(eq(user.id, userId));
-      account = { ...(created.user as { id: string; name: string; email: string; emailVerified: boolean; image?: string | null }), createdAt: now, updatedAt: now, deletedAt: null };
+      account = {
+        id: created.user.id,
+        name: created.user.name,
+        email: created.user.email,
+        emailVerified: true,
+        image: created.user.image ?? null,
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: null,
+      };
     }
     const [profile] = await db.select().from(profiles).where(eq(profiles.userId, account.id)).limit(1);
     if (profile) continue;

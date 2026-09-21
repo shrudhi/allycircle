@@ -1,6 +1,8 @@
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { getAuth } from "@/lib/auth";
+import { emailVerificationRequired } from "@/lib/auth/email-policy";
 import { getDb } from "@/lib/db";
 import { profiles, user } from "@/lib/db/schema";
 
@@ -11,23 +13,23 @@ export async function getSessionUser() {
   const db = await getDb();
   const [account] = await db.select().from(user).where(eq(user.id, session.user.id)).limit(1);
   if (!account || account.deletedAt) return null;
+  if (!account.emailVerified && !emailVerificationRequired()) {
+    await db.update(user).set({ emailVerified: true, updatedAt: new Date() }).where(eq(user.id, account.id));
+    account.emailVerified = true;
+  }
   const [profile] = await db.select().from(profiles).where(eq(profiles.userId, account.id)).limit(1);
   return { ...account, profile };
 }
 
 export async function requireSessionUser() {
   const current = await getSessionUser();
-  if (!current) throw new Error("Please log in again to continue.");
+  if (!current) redirect("/login");
   return current;
 }
 
 export async function requireMarketplaceUser() {
   const current = await requireSessionUser();
-  if (!current.emailVerified) {
-    throw new Error("Please confirm your email before using the practice network.");
-  }
-  if (!current.profile?.onboardingComplete) {
-    throw new Error("Finish your profile setup to continue.");
-  }
+  if (!current.emailVerified) redirect("/verify-email");
+  if (!current.profile?.onboardingComplete) redirect("/onboarding");
   return { ...current, profile: current.profile };
 }

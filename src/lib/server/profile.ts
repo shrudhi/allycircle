@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import { analyticsEvents } from "@/lib/analytics/taxonomy";
 import { markMeaningful, track } from "@/lib/analytics/track";
 import { requireMarketplaceUser, requireSessionUser } from "@/lib/auth/session";
+import { emailVerificationRequired } from "@/lib/auth/email-policy";
 import { OTHER_FIELD_ID, professionalFields, resolveProfessionalField } from "@/lib/config/fields";
 import { topicsForField } from "@/lib/config/topics";
 import { getDb, getNow } from "@/lib/db";
@@ -95,7 +96,11 @@ export async function saveProfileSetup(input: {
       label,
     });
   }
-  await db.update(user).set({ name: input.fullName.trim(), updatedAt: now }).where(eq(user.id, current.id));
+  await db.update(user).set({
+    name: input.fullName.trim(),
+    emailVerified: emailVerificationRequired() ? current.emailVerified : true,
+    updatedAt: now,
+  }).where(eq(user.id, current.id));
   await track(
     current.profile?.onboardingComplete ? analyticsEvents.profile_updated : analyticsEvents.onboarding_completed,
     { userId: current.id }
