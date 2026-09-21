@@ -34,48 +34,53 @@ import { setNowOverride } from "@/lib/db";
 import type { ReportReason } from "@/lib/domain/types";
 import { isGoogleCalendarConfigured } from "@/lib/integrations/google-calendar";
 
-export async function saveProfileAction(formData: FormData) {
-  const topics = formData.getAll("topics").map(String).map((item) => item.trim()).filter(Boolean);
-  const companies = formData.getAll("jobCompany").map(String);
-  const titles = formData.getAll("jobTitle").map(String);
-  const years = formData.getAll("jobYear").map(String);
-  const jobs = companies.map((company, index) => ({
-    company,
-    title: titles[index] || "",
-    year: years[index] || "",
-  }));
-  const schoolNames = formData.getAll("schoolName").map(String);
-  const degrees = formData.getAll("schoolDegree").map(String);
-  const courses = formData.getAll("schoolCourse").map(String);
-  const schools = schoolNames.map((school, index) => ({
-    school,
-    degree: degrees[index] || "",
-    course: courses[index] || "",
-  }));
-  await saveProfileSetup({
-    fullName: String(formData.get("fullName") || ""),
-    stage: String(formData.get("stage") || "working_professional"),
-    fieldId: String(formData.get("fieldId") || ""),
-    fieldCustom: String(formData.get("fieldCustom") || ""),
-    experienceYears: Number(formData.get("experienceYears") || 0),
-    targetRole: String(formData.get("targetRole") || ""),
-    bio: String(formData.get("bio") || ""),
-    linkedinUrl: String(formData.get("linkedinUrl") || ""),
-    timezone: String(formData.get("timezone") || "UTC"),
-    openToBeInterviewed: formData.get("openToBeInterviewed") === "on",
-    openToInterviewOthers: formData.get("openToInterviewOthers") === "on",
-    interviewPace: String(formData.get("interviewPace") || "active"),
-    topics,
-    jobs,
-    schools,
-  });
-  const photo = formData.get("photo");
-  if (photo instanceof File && photo.size > 0) {
-    const current = await requireSessionUser();
-    await saveProfilePhoto(current.id, photo);
+export async function saveProfileAction(_prev: { error?: string } | null, formData: FormData) {
+  try {
+    const topics = formData.getAll("topics").map(String).map((item) => item.trim()).filter(Boolean);
+    const companies = formData.getAll("jobCompany").map(String);
+    const titles = formData.getAll("jobTitle").map(String);
+    const years = formData.getAll("jobYear").map(String);
+    const jobs = companies.map((company, index) => ({
+      company,
+      title: titles[index] || "",
+      year: years[index] || "",
+    }));
+    const schoolNames = formData.getAll("schoolName").map(String);
+    const degrees = formData.getAll("schoolDegree").map(String);
+    const courses = formData.getAll("schoolCourse").map(String);
+    const schools = schoolNames.map((school, index) => ({
+      school,
+      degree: degrees[index] || "",
+      course: courses[index] || "",
+    }));
+    await saveProfileSetup({
+      fullName: String(formData.get("fullName") || ""),
+      stage: String(formData.get("stage") || "working_professional"),
+      fieldId: String(formData.get("fieldId") || ""),
+      fieldCustom: String(formData.get("fieldCustom") || ""),
+      experienceYears: Number(formData.get("experienceYears") || 0),
+      targetRole: String(formData.get("targetRole") || ""),
+      bio: String(formData.get("bio") || ""),
+      linkedinUrl: String(formData.get("linkedinUrl") || ""),
+      timezone: String(formData.get("timezone") || "UTC"),
+      openToBeInterviewed: formData.get("openToBeInterviewed") === "on",
+      openToInterviewOthers: formData.get("openToInterviewOthers") === "on",
+      interviewPace: String(formData.get("interviewPace") || "active"),
+      topics,
+      jobs,
+      schools,
+    });
+    const photo = formData.get("photo");
+    if (photo instanceof File && photo.size > 0) {
+      const current = await requireSessionUser();
+      await saveProfilePhoto(current.id, photo);
+    }
+    const next = String(formData.get("next") || "/home");
+    redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/home");
+  } catch (error) {
+    if (typeof error === "object" && error && "digest" in error) throw error;
+    return { error: error instanceof Error ? error.message : "We couldn’t save your profile. Try again." };
   }
-  const next = String(formData.get("next") || "/home");
-  redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/home");
 }
 
 export async function toggleSaveAction(allyId: string) {

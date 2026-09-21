@@ -45,7 +45,9 @@ export async function saveProfileSetup(input: {
   const db = await getDb();
   const now = await getNow();
   if (!input.fullName.trim()) throw new Error("Please add your name.");
-  if (!input.timezone) throw new Error("Choose your timezone so we can show times correctly.");
+  if (!input.timezone) {
+    input.timezone = "UTC";
+  }
   if (Number.isNaN(input.experienceYears)) throw new Error("Add your relevant experience.");
   const field = resolveProfessionalField({
     fieldId: input.fieldId || OTHER_FIELD_ID,
@@ -63,7 +65,7 @@ export async function saveProfileSetup(input: {
     fieldId: field.fieldId,
     fieldCustom: field.fieldCustom,
     currentTitle: firstJob?.title?.trim() || input.currentTitle?.trim() || null,
-    experienceYears: Math.max(0, Math.min(10, input.experienceYears)),
+    experienceYears: Math.max(0, Math.min(40, input.experienceYears)),
     currentCompany: firstJob?.company.trim() || input.currentCompany?.trim() || null,
     targetRole: input.targetRole?.trim() || null,
     bio: input.bio?.trim() || null,

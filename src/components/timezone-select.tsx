@@ -1,21 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { SearchSelect } from "@/components/search-select";
 import { getTimeZones } from "@/lib/domain/timezone";
 
 export function TimezoneSelect({ name, defaultValue }: { name: string; defaultValue?: string }) {
-  const [zone, setZone] = useState(defaultValue || "");
-  useEffect(() => {
-    if (defaultValue) return;
-    const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (detected) setZone(detected);
-  }, [defaultValue]);
+  const [zone] = useState(
+    () => defaultValue || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+  );
   const options = getTimeZones().map((item) => ({ value: item, label: item.replaceAll("_", " ") }));
   return (
     <div className="space-y-2">
       <SearchSelect
-        key={zone || "pending"}
+        key={zone}
         name={name}
         options={options}
         defaultValue={zone}

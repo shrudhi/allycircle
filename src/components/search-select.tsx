@@ -42,7 +42,10 @@ export function SearchSelect({
     <div className={cn("relative", className)}>
       <input type="hidden" name={name} value={selected?.value || ""} />
       <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger className="flex h-9 w-full items-center justify-between rounded-lg border border-[#2d2d2d] bg-[#111] px-3 text-left text-sm">
+        <PopoverTrigger
+          type="button"
+          className="flex h-9 w-full items-center justify-between rounded-lg border border-[#2d2d2d] bg-[#111] px-3 text-left text-sm"
+        >
           <span className={selected ? "truncate text-white" : "text-[#a0a0a0]"}>
             {selected?.label || placeholder}
           </span>

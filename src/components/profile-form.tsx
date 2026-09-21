@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,7 +24,10 @@ export function ProfileForm({
   photoPath,
   values,
 }: {
-  action: (formData: FormData) => void | Promise<void>;
+  action: (
+    state: { error?: string } | null,
+    formData: FormData
+  ) => Promise<{ error?: string } | null>;
   next?: string;
   submitLabel: string;
   fields: { id: string; label: string }[];
@@ -58,8 +61,10 @@ export function ProfileForm({
     values.schools.length ? values.schools : [{ school: "", degree: "", course: "" }]
   );
 
+  const [state, formAction, pending] = useActionState(action, null as { error?: string } | null);
+
   return (
-    <form action={action} className="space-y-6">
+    <form action={formAction} className="space-y-6">
       {next ? <input type="hidden" name="next" value={next} /> : null}
       <div className="flex items-center gap-4">
         <Initials name={values.fullName || values.photoName || "A"} photoPath={photoPath} size="lg" />
@@ -84,7 +89,7 @@ export function ProfileForm({
         </div>
         <div className="space-y-2">
           <Label htmlFor="experienceYears">Years of relevant experience</Label>
-          <Input id="experienceYears" name="experienceYears" type="number" min={0} max={10} required defaultValue={values.experienceYears} />
+          <Input id="experienceYears" name="experienceYears" type="number" min={0} max={40} required defaultValue={values.experienceYears} />
         </div>
       </div>
       <div className="space-y-2">
@@ -180,8 +185,9 @@ export function ProfileForm({
         </p>
         <MultiSearchSelect name="topics" options={topicOptions} defaultValues={values.topics} placeholder="Add a topic" />
       </div>
-      <Button type="submit" className="h-10 gold-outline">
-        {submitLabel}
+      {state?.error ? <p className="text-sm text-[#e07070]">{state.error}</p> : null}
+      <Button type="submit" className="h-10 gold-outline" disabled={pending}>
+        {pending ? "Saving…" : submitLabel}
       </Button>
     </form>
   );
