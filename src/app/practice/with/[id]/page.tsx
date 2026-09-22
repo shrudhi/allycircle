@@ -2,8 +2,8 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { getSessionUser } from "@/lib/auth/session";
 import { getInteraction } from "@/lib/server/sessions";
-import { replyMessageAction, testimonialVisibilityAction } from "@/app/actions/app";
-import { Button } from "@/components/ui/button";
+import { testimonialVisibilityAction } from "@/app/actions/app";
+import { ChatThread } from "@/components/chat-thread";
 import { formatInTimeZone } from "@/lib/domain/timezone";
 import { formatLabel, requestStateLabel, sessionStateLabel } from "@/lib/domain/copy";
 import { SafetyMenu } from "@/components/safety-menu";
@@ -22,22 +22,19 @@ export default async function InteractionPage({ params }: { params: Promise<{ id
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.16em] text-[#d4af37]">Practice</p>
-          <h1 className="mt-2 text-3xl font-semibold">{data.otherName}</h1>
+          <h1 className="mt-2 font-serif text-3xl">{data.otherName}</h1>
           {data.blocked ? <p className="mt-2 text-sm text-[#e07070]">This relationship is blocked. Existing sessions stay.</p> : null}
         </div>
         <SafetyMenu userId={id} />
       </div>
 
       {latestSession ? (
-        <section className="mt-8 rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-5">
-          <h2 className="font-medium">Session</h2>
-          <p className="mt-2 text-sm text-[#a0a0a0]">
-            {formatInTimeZone(latestSession.startUtc, current.profile.timezone)} · {formatLabel(latestSession.format, "detail")} · {sessionStateLabel(latestSession.state)}
+        <section className="mt-6 rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-4">
+          <p className="text-sm text-[#b3b3b3]">
+            {sessionStateLabel(latestSession.state)} · {formatInTimeZone(latestSession.startUtc, current.profile.timezone)} ·{" "}
+            {formatLabel(latestSession.format, "detail")}
           </p>
-          {latestSession.format === "reciprocal_swap" ? (
-            <p className="mt-2 text-sm text-[#a0a0a0]">They interview you first, then you interview them. Same meeting.</p>
-          ) : null}
-          <div className="mt-4 flex flex-wrap gap-3">
+          <div className="mt-3 flex flex-wrap gap-3">
             <a href={`/practice/sessions/${latestSession.id}`} className="text-sm text-[#d4af37]">
               Session details
             </a>
@@ -49,57 +46,35 @@ export default async function InteractionPage({ params }: { params: Promise<{ id
             ) : null}
           </div>
         </section>
-      ) : null}
-
-      {latestRequest ? (
-        <section className="mt-6 rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-5">
-          <h2 className="font-medium">Request history</h2>
-          <div className="mt-3 space-y-2 text-sm text-[#a0a0a0]">
-            {data.requests.map((request) => (
-              <p key={request.id}>
-                {requestStateLabel(request.state)} · {formatLabel(request.format)}
-                {request.proposedStartUtc ? ` · ${formatInTimeZone(request.proposedStartUtc, current.profile.timezone)}` : ""}
-                {request.openToTwoWay ? " · open to two-way" : ""}
-              </p>
-            ))}
-            {data.events.map((event) => (
-              <p key={event.id}>
-                {requestStateLabel(event.toState)}
-                {event.note ? ` · ${event.note.replaceAll("_", " ")}` : ""}
-              </p>
-            ))}
-          </div>
-          <a href={`/practice/requests/${latestRequest.id}`} className="mt-3 inline-block text-sm text-[#d4af37]">
+      ) : latestRequest ? (
+        <section className="mt-6 rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-4">
+          <p className="text-sm text-[#b3b3b3]">
+            {requestStateLabel(latestRequest.state)}
+            {latestRequest.proposedStartUtc
+              ? ` · ${formatInTimeZone(latestRequest.proposedStartUtc, current.profile.timezone)}`
+              : ""}
+          </p>
+          <a href={`/practice/requests/${latestRequest.id}`} className="mt-2 inline-block text-sm text-[#d4af37]">
             Open request
           </a>
         </section>
       ) : null}
 
-      <section className="mt-6 rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-5">
-        <h2 className="font-medium">Messages</h2>
+      <div className="mt-6">
         {data.thread ? (
-          <>
-            <div className="mt-4 max-h-[40vh] space-y-3 overflow-auto">
-              {data.thread.messages.map((message) => (
-                <div key={message.id} className={message.senderId === current.id ? "text-right" : "text-left"}>
-                  <p className="inline-block rounded-xl border border-[#2d2d2d] px-3 py-2 text-sm">{message.body}</p>
-                </div>
-              ))}
-            </div>
-            {data.thread.canReply ? (
-              <form action={replyMessageAction} className="mt-4 flex gap-2">
-                <input type="hidden" name="otherId" value={id} />
-                <input name="body" className="h-10 flex-1 rounded-lg border border-[#2d2d2d] bg-[#111] px-3 text-sm" required />
-                <Button>Send</Button>
-              </form>
-            ) : (
-              <p className="mt-4 text-sm text-[#a0a0a0]">New messages aren’t available.</p>
-            )}
-          </>
+          <ChatThread
+            currentUserId={current.id}
+            otherName={data.otherName}
+            timezone={current.profile.timezone}
+            messages={data.thread.messages}
+            canReply={data.thread.canReply}
+            otherId={id}
+            next={`/practice/with/${id}`}
+          />
         ) : (
-          <p className="mt-3 text-sm text-[#a0a0a0]">No messages yet.</p>
+          <p className="text-sm text-[#a0a0a0]">No messages yet.</p>
         )}
-      </section>
+      </div>
 
       {data.feedback.length || data.testimonials.length ? (
         <section className="mt-6 rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-5">
@@ -118,7 +93,9 @@ export default async function InteractionPage({ params }: { params: Promise<{ id
                 <label className="mt-2 flex items-center gap-2">
                   <input type="checkbox" name="visible" defaultChecked={item.recipientVisible} />
                   Show publicly on my profile
-                  <Button variant="outline" size="sm">Save</Button>
+                  <button type="submit" className="rounded-md border border-[#2d2d2d] px-2 py-1 text-xs">
+                    Save
+                  </button>
                 </label>
               ) : null}
             </form>

@@ -35,6 +35,23 @@ export function formatInTimeZone(date: Date, timeZone: string, options?: Intl.Da
   }).format(date);
 }
 
+export function formatDateOnly(date: Date, timeZone: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+  }).format(date);
+}
+
+export function formatTimeOnly(date: Date, timeZone: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
 function tzParts(date: Date, timeZone: string) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone,

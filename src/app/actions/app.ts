@@ -131,8 +131,11 @@ export async function sendMessageAction(formData: FormData) {
 }
 
 export async function replyMessageAction(formData: FormData) {
-  await sendMessage(String(formData.get("otherId")), String(formData.get("body") || ""));
+  const result = await sendMessage(String(formData.get("otherId")), String(formData.get("body") || ""));
+  const next = String(formData.get("next") || "");
   revalidatePath("/messages");
+  revalidatePath("/practice");
+  redirect(next.startsWith("/") && !next.startsWith("//") ? next : `/messages?id=${result.conversationId}`);
 }
 
 export async function attendanceAction(formData: FormData) {
