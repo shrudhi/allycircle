@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { getSessionUser } from "@/lib/auth/session";
@@ -39,14 +38,14 @@ export default async function InteractionPage({ params }: { params: Promise<{ id
             <p className="mt-2 text-sm text-[#a0a0a0]">They interview you first, then you interview them. Same meeting.</p>
           ) : null}
           <div className="mt-4 flex flex-wrap gap-3">
-            <Link href={`/practice/sessions/${latestSession.id}`} className="text-sm text-[#d4af37]">
+            <a href={`/practice/sessions/${latestSession.id}`} className="text-sm text-[#d4af37]">
               Session details
-            </Link>
+            </a>
             {latestSession.state === "scheduled" ? <JoinButton sessionId={latestSession.id} pulse={false} /> : null}
             {latestSession.state === "completed" ? (
-              <Link href={`/practice/sessions/${latestSession.id}/feedback`} className="text-sm text-[#d4af37]">
+              <a href={`/practice/sessions/${latestSession.id}/feedback`} className="text-sm text-[#d4af37]">
                 Feedback
-              </Link>
+              </a>
             ) : null}
           </div>
         </section>
@@ -70,9 +69,9 @@ export default async function InteractionPage({ params }: { params: Promise<{ id
               </p>
             ))}
           </div>
-          <Link href={`/practice/requests/${latestRequest.id}`} className="mt-3 inline-block text-sm text-[#d4af37]">
+          <a href={`/practice/requests/${latestRequest.id}`} className="mt-3 inline-block text-sm text-[#d4af37]">
             Open request
-          </Link>
+          </a>
         </section>
       ) : null}
 

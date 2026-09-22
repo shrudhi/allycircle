@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { getSessionUser } from "@/lib/auth/session";
@@ -116,13 +115,13 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             <Button variant="outline">Propose two-way</Button>
           </form>
         ) : null}
-        <Link href={`/practice/with/${data.otherId}`} className="text-sm text-[#d4af37]">
+        <a href={`/practice/with/${data.otherId}`} className="text-sm text-[#d4af37]">
           Open full conversation
-        </Link>
+        </a>
         {["completed", "did_not_happen", "cancelled"].includes(session.state) ? (
-          <Link href={`/allies/${data.otherId}/request`} className="text-sm text-[#d4af37]">
+          <a href={`/allies/${data.otherId}/request`} className="text-sm text-[#d4af37]">
             Practice again
-          </Link>
+          </a>
         ) : null}
         {session.state === "scheduled" ? (
           <form action={cancelSessionAction}>
@@ -179,9 +178,9 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       ) : null}
       {session.state === "completed" ? (
         <div className="mt-6 space-y-3">
-          <Link href={`/practice/sessions/${id}/feedback`} className="inline-block text-sm text-[#d4af37]">
+          <a href={`/practice/sessions/${id}/feedback`} className="inline-block text-sm text-[#d4af37]">
             Leave a note for {data.otherName}
-          </Link>
+          </a>
           {data.canSuperLike ? (
             <form action={superLikeAction}>
               <input type="hidden" name="sessionId" value={id} />

@@ -1,17 +1,8 @@
-import Link from "next/link";
-import { Bell, CalendarDays, Home, MessageCircle, Search, Settings } from "lucide-react";
+import { Bell, CalendarDays, Home, MessageCircle, Search } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { Initials } from "@/components/initials";
 import { getSessionUser } from "@/lib/auth/session";
 import { getAttentionCounts } from "@/lib/server/attention";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { signOutAction } from "@/app/actions/auth";
 
 const nav = [
   { href: "/home", label: "Home", icon: Home, badge: "none" as const },
@@ -52,20 +43,21 @@ export async function AppShell({
             {nav.map((item) => {
               const count =
                 item.badge === "messages" ? counts.unreadMessages : item.badge === "practice" ? counts.practiceAction : 0;
+              const href = item.badge === "practice" && count ? "/practice?tab=requests" : item.href;
               return (
-                <Link
+                <a
                   key={item.href}
-                  href={item.badge === "practice" && count ? "/practice?tab=requests" : item.href}
+                  href={href}
                   className="gold-outline flex items-center rounded-lg px-3 py-2 text-sm text-[#a0a0a0] hover:text-white"
                 >
                   {item.label}
                   <CountBadge count={count} />
-                </Link>
+                </a>
               );
             })}
           </nav>
           <div className="flex items-center gap-2">
-            <Link
+            <a
               href="/notifications"
               aria-label="Notifications"
               className="gold-outline relative flex size-9 items-center justify-center rounded-lg text-[#a0a0a0]"
@@ -74,34 +66,10 @@ export async function AppShell({
               {counts.unreadNotifications > 0 ? (
                 <span className="absolute right-1 top-1 size-2 rounded-full bg-[#d4af37]" />
               ) : null}
-            </Link>
-            <DropdownMenu>
-              <DropdownMenuTrigger className="gold-outline rounded-full">
-                <Initials name={displayName} photoPath={current?.profile?.photoPath} size="sm" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-52">
-                <DropdownMenuItem>
-                  <Link href="/settings" className="flex items-center gap-2">
-                    <Settings className="size-4" /> Profile & Settings
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Link href="/record">Your record</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Link href="/settings#calendar">Calendar connection</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Link href="/notifications">Notifications</Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <form action={signOutAction}>
-                  <button type="submit" className="flex w-full px-1.5 py-1 text-left text-sm">
-                    Sign out
-                  </button>
-                </form>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            </a>
+            <a href="/settings" className="gold-outline rounded-full" aria-label="Profile and settings">
+              <Initials name={displayName} photoPath={current?.profile?.photoPath} size="sm" />
+            </a>
           </div>
         </div>
         <nav className="flex items-center justify-around border-t border-[#2d2d2d] px-2 py-2 md:hidden">
@@ -109,13 +77,13 @@ export async function AppShell({
             const count =
               item.badge === "messages" ? counts.unreadMessages : item.badge === "practice" ? counts.practiceAction : 0;
             return (
-              <Link key={item.href} href={item.href} className="flex flex-col items-center gap-1 text-[11px] text-[#a0a0a0]">
+              <a key={item.href} href={item.href} className="flex flex-col items-center gap-1 text-[11px] text-[#a0a0a0]">
                 <span className="relative">
                   <item.icon className="size-4" />
                   {count > 0 ? <span className="absolute -right-1 -top-1 size-1.5 rounded-full bg-[#d4af37]" /> : null}
                 </span>
                 {item.label}
-              </Link>
+              </a>
             );
           })}
         </nav>

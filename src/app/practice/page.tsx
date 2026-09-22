@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { getSessionUser } from "@/lib/auth/session";
@@ -72,7 +71,7 @@ export default async function PracticePage({
       <p className="mt-2 text-sm text-[#b3b3b3]">Confirmed interviews, outstanding requests, and the record of what already happened.</p>
       <div className="mt-8 grid grid-cols-3 gap-2 border-b border-white/10">
         {tabs.map((item) => (
-          <Link
+          <a
             key={item.id}
             href={item.href}
             className={cn(
@@ -82,7 +81,7 @@ export default async function PracticePage({
           >
             {item.label}
             {item.count ? <span className="ml-2 rounded-full bg-[#d4af37] px-2 text-[10px] text-black">{item.count}</span> : null}
-          </Link>
+          </a>
         ))}
       </div>
 
@@ -95,7 +94,7 @@ export default async function PracticePage({
               { id: "interviewing", label: "I’m interviewing" },
               { id: "two_way", label: "Two-way" },
             ].map((item) => (
-              <Link
+              <a
                 key={item.id || "all"}
                 href={item.id ? `/practice?tab=upcoming&filter=${item.id}` : "/practice?tab=upcoming"}
                 className={cn(
@@ -104,7 +103,7 @@ export default async function PracticePage({
                 )}
               >
                 {item.label}
-              </Link>
+              </a>
             ))}
           </div>
           {filteredUpcoming.length === 0 ? (
@@ -114,7 +113,7 @@ export default async function PracticePage({
             const duration = Math.round((session.endUtc.getTime() - session.startUtc.getTime()) / 60000);
             const unread = attention.unreadByOther.has(session.otherId);
             return (
-              <Link key={session.id} href={`/practice/with/${session.otherId}`} className="block rounded-2xl border border-white/10 bg-[#141414] p-5">
+              <a key={session.id} href={`/practice/with/${session.otherId}`} className="block rounded-2xl border border-white/10 bg-[#141414] p-5">
                 <p className="font-serif text-xl">{session.otherName}</p>
                 <p className="mt-2 text-sm text-[#b3b3b3]">
                   {formatInTimeZone(session.startUtc, current.profile.timezone)} · {duration} min · {formatLabel(session.format)}
@@ -127,7 +126,7 @@ export default async function PracticePage({
                       : "They interview you"}
                 </p>
                 {unread ? <p className="mt-2 text-xs text-[#d4af37]">New message</p> : null}
-              </Link>
+              </a>
             );
           })}
         </div>
@@ -136,18 +135,18 @@ export default async function PracticePage({
       {tab === "requests" ? (
         <div className="mt-6 space-y-4">
           <div className="grid grid-cols-2 gap-2 rounded-xl bg-black p-1">
-            <Link
+            <a
               href="/practice?tab=requests&inbox=received"
               className={cn("rounded-lg py-3 text-center text-sm", inbox === "received" ? "bg-[#d4af37] text-black" : "text-[#b3b3b3]")}
             >
               Received{attention.receivedAction ? ` · ${attention.receivedAction}` : ""}
-            </Link>
-            <Link
+            </a>
+            <a
               href="/practice?tab=requests&inbox=sent"
               className={cn("rounded-lg py-3 text-center text-sm", inbox === "sent" ? "bg-[#d4af37] text-black" : "text-[#b3b3b3]")}
             >
               Sent{attention.sentAction ? ` · ${attention.sentAction}` : ""}
-            </Link>
+            </a>
           </div>
           {(inbox === "received" ? received : sent).length === 0 ? (
             <p className="rounded-2xl border border-white/10 bg-[#141414] p-6 text-sm text-[#b3b3b3]">
@@ -157,13 +156,13 @@ export default async function PracticePage({
           {(inbox === "received" ? received : sent).map((request) => {
             const otherId = request.requesterId === current.id ? request.receiverId : request.requesterId;
             return (
-              <Link key={request.id} href={`/practice/with/${otherId}`} className="block rounded-2xl border border-white/10 bg-[#141414] p-5">
+              <a key={request.id} href={`/practice/with/${otherId}`} className="block rounded-2xl border border-white/10 bg-[#141414] p-5">
                 <p className="font-serif text-xl">{request.otherName}</p>
                 <p className="mt-2 text-sm text-[#b3b3b3]">
                   {request.proposedStartUtc ? formatInTimeZone(request.proposedStartUtc, current.profile.timezone) : "Time not set"} · {formatLabel(request.format)} · {requestStateLabel(request.state)}
                 </p>
                 {request.message ? <p className="mt-2 line-clamp-2 text-sm text-[#8a8a8a]">{request.message}</p> : null}
-              </Link>
+              </a>
             );
           })}
         </div>
@@ -181,7 +180,7 @@ export default async function PracticePage({
               { id: "cancelled", label: "Cancelled" },
               { id: "time_unavailable", label: "Time taken" },
             ].map((item) => (
-              <Link
+              <a
                 key={item.id || "all"}
                 href={item.id ? `/practice?tab=history&status=${item.id}` : "/practice?tab=history"}
                 className={cn(
@@ -190,7 +189,7 @@ export default async function PracticePage({
                 )}
               >
                 {item.label}
-              </Link>
+              </a>
             ))}
           </div>
           {historyItems.length === 0 ? (
@@ -199,12 +198,12 @@ export default async function PracticePage({
             </p>
           ) : null}
           {historyItems.map((item) => (
-            <Link key={item.id} href={item.href} className="block rounded-2xl border border-white/10 bg-[#141414] p-5">
+            <a key={item.id} href={item.href} className="block rounded-2xl border border-white/10 bg-[#141414] p-5">
               <p className="font-serif text-xl">{item.name}</p>
               <p className="mt-2 text-sm text-[#b3b3b3]">
                 {item.when} · {item.detail} · {item.status}
               </p>
-            </Link>
+            </a>
           ))}
         </div>
       ) : null}

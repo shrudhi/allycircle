@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { getSessionUser } from "@/lib/auth/session";
@@ -30,7 +29,7 @@ export default async function MessagesPage({
         <aside className="space-y-2">
           {conversations.length === 0 ? <p className="text-sm text-[#a0a0a0]">No conversations yet.</p> : null}
           {conversations.map((item) => (
-            <Link key={item.id} href={`/messages?id=${item.id}`} className="block rounded-xl border border-[#2d2d2d] bg-[#1e1e1e] p-3 text-sm">
+            <a key={item.id} href={`/messages?id=${item.id}`} className="block rounded-xl border border-[#2d2d2d] bg-[#1e1e1e] p-3 text-sm">
               <span className="flex items-center justify-between gap-2">
                 {item.otherName}
                 {item.unread ? <span className="size-2 rounded-full bg-[#d4af37]" /> : null}
@@ -38,11 +37,11 @@ export default async function MessagesPage({
               {item.unread ? <p className="mt-1 text-xs text-[#d4af37]">New message</p> : null}
               <p className="mt-2 text-xs text-[#a0a0a0]">{item.lastPreview}</p>
               <p className="mt-2">
-                <Link href={`/practice/with/${item.otherId}`} className="text-xs text-[#d4af37]">
+                <a href={`/practice/with/${item.otherId}`} className="text-xs text-[#d4af37]">
                   Open sessions
-                </Link>
+                </a>
               </p>
-            </Link>
+            </a>
           ))}
         </aside>
         <section className="rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-4">

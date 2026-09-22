@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -30,7 +30,7 @@ export function RequestForm({
   canSwap,
   interviewSlots,
 }: {
-  action: (state: { error?: string } | null, formData: FormData) => Promise<{ error?: string } | null>;
+  action: (formData: FormData) => void | Promise<void>;
   allyId: string;
   canSwap: boolean;
   interviewSlots: BookableSlotView[];
@@ -48,7 +48,7 @@ export function RequestForm({
   const [cursor, setCursor] = useState({ year: 2026, month: 8 });
   const [dateKey, setDateKey] = useState("");
   const [startIso, setStartIso] = useState("");
-  const [state, formAction, pending] = useActionState(action, null);
+  const [hint, setHint] = useState("");
   const times = dateKey ? byDate.get(dateKey) || [] : [];
   const title = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(
     new Date(cursor.year, cursor.month, 1)
@@ -66,7 +66,16 @@ export function RequestForm({
   }
 
   return (
-    <form action={formAction} className="mt-8 space-y-8 rounded-2xl border border-white/10 bg-[#141414] p-6">
+    <form
+      action={action}
+      onSubmit={(event) => {
+        if (!startIso) {
+          event.preventDefault();
+          setHint("Pick a date and time first.");
+        }
+      }}
+      className="mt-8 space-y-8 rounded-2xl border border-white/10 bg-[#141414] p-6"
+    >
       <input type="hidden" name="allyId" value={allyId} />
       <input type="hidden" name="startIso" value={startIso} />
       <div>
@@ -173,13 +182,9 @@ export function RequestForm({
           placeholder="Interview stage, company, or topic (optional)"
         />
       </div>
-      {state?.error ? <p className="text-sm text-[#e07070]">{state.error}</p> : null}
-      <button
-        type="submit"
-        className={cn(buttonVariants({ size: "lg" }), "gold-outline h-11 px-6")}
-        disabled={!startIso || pending}
-      >
-        {pending ? "Sending…" : "Send request"}
+      {hint ? <p className="text-sm text-[#e07070]">{hint}</p> : null}
+      <button type="submit" className={cn(buttonVariants({ size: "lg" }), "gold-outline h-11 px-6")}>
+        Send request
       </button>
     </form>
   );

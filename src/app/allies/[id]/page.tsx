@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
@@ -43,12 +42,12 @@ export default async function AllyProfilePage({ params }: { params: Promise<{ id
               <ExternalLink className="size-4" />
             </a>
           ) : null}
-          <Link href={`/messages?to=${id}`} className={cn(buttonVariants({ variant: "outline" }))}>
+          <a href={`/messages?to=${id}`} className={cn(buttonVariants({ variant: "outline" }))}>
             Message
-          </Link>
-          <Link href={`/allies/${id}/request`} className={cn(buttonVariants(), "gold-outline")}>
+          </a>
+          <a href={`/allies/${id}/request`} className={cn(buttonVariants(), "gold-outline")}>
             Request session
-          </Link>
+          </a>
           <SafetyMenu userId={id} />
         </div>
       </div>

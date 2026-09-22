@@ -89,7 +89,7 @@ export async function toggleSaveAction(allyId: string) {
   revalidatePath(`/allies/${allyId}`);
 }
 
-export async function sendRequestAction(_prev: { error?: string } | null, formData: FormData) {
+export async function sendRequestAction(formData: FormData) {
   try {
     const result = await createPracticeRequest({
       allyId: String(formData.get("allyId")),
@@ -100,7 +100,7 @@ export async function sendRequestAction(_prev: { error?: string } | null, formDa
     redirect(`/practice/requests/${result.id}`);
   } catch (error) {
     if (typeof error === "object" && error && "digest" in error) throw error;
-    return { error: error instanceof Error ? error.message : "We couldn’t send that request. Try another time." };
+    throw new Error(error instanceof Error ? error.message : "We couldn’t send that request. Try another time.");
   }
 }
 

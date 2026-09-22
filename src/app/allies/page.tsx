@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
@@ -45,9 +44,9 @@ export default async function AlliesPage({
           ["connected", "Past connections"],
           ["saved", "Saved"],
         ].map(([value, label]) => (
-          <Link key={value} href={`/allies?tab=${value}`} className={tab === value ? "text-[#d4af37]" : "text-[#8a8a8a]"}>
+          <a key={value} href={`/allies?tab=${value}`} className={tab === value ? "text-[#d4af37]" : "text-[#8a8a8a]"}>
             {label}
-          </Link>
+          </a>
         ))}
       </div>
       {result.cards.length === 0 ? (
@@ -90,21 +89,21 @@ export default async function AlliesPage({
                 <p className="mt-4 text-sm text-[#b3b3b3]">{card.reasons.map((reason) => reason.label).join(" · ")}</p>
               ) : null}
               <div className="mt-5 flex gap-2">
-                <Link href={`/allies/${card.id}`} className={cn(buttonVariants({ variant: "outline" }))}>
+                <a href={`/allies/${card.id}`} className={cn(buttonVariants({ variant: "outline" }))}>
                   View profile
-                </Link>
-                <Link href={`/allies/${card.id}/request`} className={cn(buttonVariants(), "gold-outline")}>
+                </a>
+                <a href={`/allies/${card.id}/request`} className={cn(buttonVariants(), "gold-outline")}>
                   Request session
-                </Link>
+                </a>
               </div>
             </article>
           ))}
         </div>
       )}
       {result.nextCursor ? (
-        <Link href={`/allies?tab=${tab}&cursor=${result.nextCursor}&q=${params.q || ""}`} className="mt-6 inline-block text-sm text-[#d4af37]">
+        <a href={`/allies?tab=${tab}&cursor=${result.nextCursor}&q=${params.q || ""}`} className="mt-6 inline-block text-sm text-[#d4af37]">
           Load more
-        </Link>
+        </a>
       ) : null}
     </AppShell>
   );

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { getSessionUser } from "@/lib/auth/session";
@@ -52,9 +51,9 @@ export default async function HomePage({
             A private floor for operators who still take the interview room seriously.
           </p>
         </div>
-        <Link href="/allies" className={cn(buttonVariants(), "gold-outline h-11 px-6")}>
+        <a href="/allies" className={cn(buttonVariants(), "gold-outline h-11 px-6")}>
           Find People
-        </Link>
+        </a>
       </div>
 
       {data.takingABreak ? (
@@ -65,23 +64,23 @@ export default async function HomePage({
 
       <div className="mt-6 flex flex-wrap gap-3 text-sm">
         {attention.unreadMessages > 0 ? (
-          <Link href="/messages" className="rounded-full border border-[#d4af37]/40 px-3 py-1 text-[#d4af37]">
+          <a href="/messages" className="rounded-full border border-[#d4af37]/40 px-3 py-1 text-[#d4af37]">
             Messages · {attention.unreadMessages}
-          </Link>
+          </a>
         ) : null}
         {attention.practiceAction > 0 ? (
-          <Link href="/practice?tab=requests" className="rounded-full border border-[#d4af37]/40 px-3 py-1 text-[#d4af37]">
+          <a href="/practice?tab=requests" className="rounded-full border border-[#d4af37]/40 px-3 py-1 text-[#d4af37]">
             Sessions · {attention.practiceAction}
-          </Link>
+          </a>
         ) : null}
       </div>
 
       <section className="mt-10">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <h2 className="font-serif text-2xl">Upcoming sessions</h2>
-          <Link href="/practice?tab=upcoming" className="text-sm text-[#d4af37]">
+          <a href="/practice?tab=upcoming" className="text-sm text-[#d4af37]">
             Open calendar
-          </Link>
+          </a>
         </div>
         <div className="mt-4 flex flex-wrap gap-2 text-sm">
           {[
@@ -90,7 +89,7 @@ export default async function HomePage({
             { id: "interviewing", label: "I’m interviewing" },
             { id: "two_way", label: "Two-way" },
           ].map((item) => (
-            <Link
+            <a
               key={item.id || "all"}
               href={item.id ? `/home?filter=${item.id}` : "/home"}
               className={cn(
@@ -99,7 +98,7 @@ export default async function HomePage({
               )}
             >
               {item.label}
-            </Link>
+            </a>
           ))}
         </div>
         {upcoming.length === 0 ? (
@@ -111,7 +110,7 @@ export default async function HomePage({
         ) : (
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             {upcoming.map((session) => (
-              <Link
+              <a
                 key={session.id}
                 href={`/practice/sessions/${session.id}`}
                 className="rounded-2xl border border-white/10 bg-[#141414] p-5"
@@ -127,7 +126,7 @@ export default async function HomePage({
                       ? "You are interviewing"
                       : "They interview you"}
                 </p>
-              </Link>
+              </a>
             ))}
           </div>
         )}
@@ -136,9 +135,9 @@ export default async function HomePage({
       <section className="mt-10">
         <div className="flex items-end justify-between">
           <h2 className="font-serif text-2xl">Pending requests</h2>
-          <Link href="/practice?tab=requests" className="text-sm text-[#d4af37]">
+          <a href="/practice?tab=requests" className="text-sm text-[#d4af37]">
             Review
-          </Link>
+          </a>
         </div>
         {data.pendingRequests.length === 0 ? (
           <p className="mt-4 rounded-2xl border border-white/10 bg-[#141414] p-6 text-sm text-[#b3b3b3]">
@@ -147,7 +146,7 @@ export default async function HomePage({
         ) : (
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             {data.pendingRequests.map((request) => (
-              <Link
+              <a
                 key={request.id}
                 href={`/practice/requests/${request.id}`}
                 className="rounded-2xl border border-white/10 bg-[#141414] p-5"
@@ -157,7 +156,7 @@ export default async function HomePage({
                   {request.direction === "received" ? "Incoming" : "Sent"} · {requestStateLabel(request.state)} ·{" "}
                   {formatLabel(request.format)}
                 </p>
-              </Link>
+              </a>
             ))}
           </div>
         )}

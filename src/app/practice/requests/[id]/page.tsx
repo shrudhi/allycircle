@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { getSessionUser } from "@/lib/auth/session";
 import { getRequestDetail, listSlotsForAlly } from "@/lib/server/requests";
@@ -118,9 +117,9 @@ export default async function RequestDetailPage({ params }: { params: Promise<{ 
           </Button>
         </form>
       ) : null}
-      <Link href={`/practice/with/${data.otherId}`} className="mt-6 inline-block text-sm text-[#d4af37]">
+      <a href={`/practice/with/${data.otherId}`} className="mt-6 inline-block text-sm text-[#d4af37]">
         Open full conversation
-      </Link>
+      </a>
     </AppShell>
   );
 }
