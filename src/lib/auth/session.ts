@@ -14,8 +14,12 @@ export async function getSessionUser() {
   const [account] = await db.select().from(user).where(eq(user.id, session.user.id)).limit(1);
   if (!account || account.deletedAt) return null;
   if (!account.emailVerified && !emailVerificationRequired()) {
-    await db.update(user).set({ emailVerified: true, updatedAt: new Date() }).where(eq(user.id, account.id));
-    account.emailVerified = true;
+    try {
+      await db.update(user).set({ emailVerified: true, updatedAt: new Date() }).where(eq(user.id, account.id));
+      account.emailVerified = true;
+    } catch (error) {
+      console.error("[auth] could not mark email verified", error);
+    }
   }
   const [profile] = await db.select().from(profiles).where(eq(profiles.userId, account.id)).limit(1);
   return { ...account, profile };

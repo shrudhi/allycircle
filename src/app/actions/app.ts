@@ -34,7 +34,10 @@ import { setNowOverride } from "@/lib/db";
 import type { ReportReason } from "@/lib/domain/types";
 import { isGoogleCalendarConfigured } from "@/lib/integrations/google-calendar";
 
-export async function saveProfileAction(_prev: { error?: string } | null, formData: FormData) {
+export async function saveProfileAction(formData: FormData) {
+  const next = String(formData.get("next") || "/home");
+  const back = String(formData.get("back") || "/onboarding");
+  const safeBack = back.startsWith("/") && !back.startsWith("//") ? back : "/onboarding";
   try {
     const topics = formData.getAll("topics").map(String).map((item) => item.trim()).filter(Boolean);
     const companies = formData.getAll("jobCompany").map(String);
@@ -75,11 +78,11 @@ export async function saveProfileAction(_prev: { error?: string } | null, formDa
       const current = await requireSessionUser();
       await saveProfilePhoto(current.id, photo);
     }
-    const next = String(formData.get("next") || "/home");
     redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/home");
   } catch (error) {
     if (typeof error === "object" && error && "digest" in error) throw error;
-    return { error: error instanceof Error ? error.message : "We couldn’t save your profile. Try again." };
+    const message = error instanceof Error ? error.message : "We couldn’t save your profile. Try again.";
+    redirect(`${safeBack.split("?")[0]}?error=${encodeURIComponent(message)}`);
   }
 }
 

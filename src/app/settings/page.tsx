@@ -22,12 +22,12 @@ import Link from "next/link";
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ calendar?: string }>;
+  searchParams: Promise<{ calendar?: string; error?: string }>;
 }) {
   const current = await getSessionUser();
   if (!current?.profile) redirect("/login");
   const settings = await mySettings();
-  const { calendar } = await searchParams;
+  const { calendar, error } = await searchParams;
   const calendarLive = isGoogleCalendarConfigured();
   const live = integrationStatus();
   const calendarMessage =
@@ -51,10 +51,12 @@ export default async function SettingsPage({
         .
       </p>
       <div className="mt-8 rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-6">
-        <ProfileForm
-          action={saveProfileAction}
-          next="/settings"
-          submitLabel="Save profile"
+          <ProfileForm
+            action={saveProfileAction}
+            next="/settings"
+            back="/settings"
+            submitLabel="Save profile"
+            formError={error}
           fields={settings.fields}
           topicOptions={suggestedTopics.map((topic) => ({ value: topic.id, label: topic.label }))}
           photoPath={settings.profile.photoPath}
