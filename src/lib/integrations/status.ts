@@ -1,4 +1,4 @@
-import { isEmailConfigured } from "@/lib/integrations/email";
+import { canDeliverEmail, isEmailConfigured } from "@/lib/integrations/email";
 import { isGoogleCalendarConfigured, isGoogleLoginConfigured } from "@/lib/integrations/google-calendar";
 
 export function integrationStatus() {
@@ -7,5 +7,6 @@ export function integrationStatus() {
     googleLogin: isGoogleLoginConfigured(),
     googleCalendar: isGoogleCalendarConfigured(),
     email: isEmailConfigured(),
+    emailDeliverable: canDeliverEmail(),
   };
 }

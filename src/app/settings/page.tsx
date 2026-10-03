@@ -119,7 +119,14 @@ export default async function SettingsPage({
           <li>Database: {live.database === "hosted" ? "DATABASE_URL (hosted Postgres)" : "local PGlite — set DATABASE_URL for production"}</li>
           <li>Google login: {live.googleLogin ? "configured" : "set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET"}</li>
           <li>Google Calendar / Meet: {live.googleCalendar ? "configured" : "same Google client, plus Calendar API and redirect /api/calendar/google/callback"}</li>
-          <li>Email: {live.email ? "Resend is sending" : "set RESEND_API_KEY (and EMAIL_FROM) — until then mail stays in /dev/inbox"}</li>
+          <li>
+            Email:{" "}
+            {live.emailDeliverable
+              ? "Resend can send to anyone from your EMAIL_FROM domain"
+              : live.email
+                ? "Resend API key is set, but EMAIL_FROM still needs a verified domain — until then accounts work without confirmation mail"
+                : "set RESEND_API_KEY (and EMAIL_FROM) — until then mail stays in /dev/inbox"}
+          </li>
         </ul>
       </section>
 

@@ -7,7 +7,6 @@ import { authClient } from "@/lib/auth/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 
 export function AuthForm({
   mode,
@@ -44,11 +43,17 @@ export function AuthForm({
           const code = (result.error as { code?: string }).code || "";
           const message = result.error.message || "";
           if (code === "USER_ALREADY_EXISTS" || /already exists|already registered/i.test(message)) {
-            setError("That email already has an account. Use Log in instead.");
+            setError("That email already has an account. Use Log in, or Continue with Google.");
           } else if (/database|connect|timeout|ECONN/i.test(message)) {
             setError("The live database isn’t connected yet. Add DATABASE_URL in Vercel and redeploy.");
+          } else if (/verif/i.test(message) || /email/i.test(code)) {
+            setError("The account was created. Check your inbox, or go to Log in. If no email arrives, use Continue with Google.");
           } else {
-            setError("We couldn’t create that account. Use a new email, a password of at least 8 characters, and tick the terms box.");
+            setError(
+              message
+                ? `We couldn’t create that account. ${message}`
+                : "We couldn’t create that account. Try Continue with Google, or Log in if you already signed up."
+            );
           }
           setPending(false);
           return;
@@ -91,7 +96,12 @@ export function AuthForm({
       </div>
       {mode === "signup" ? (
         <label className="flex items-start gap-2 text-sm text-[#a0a0a0]">
-          <Checkbox checked={accepted} onCheckedChange={(value) => setAccepted(Boolean(value))} />
+          <input
+            type="checkbox"
+            className="mt-1 size-4 accent-[#d4af37]"
+            checked={accepted}
+            onChange={(event) => setAccepted(event.target.checked)}
+          />
           <span>
             I agree to the{" "}
             <Link href="/terms" className="text-[#d4af37]">

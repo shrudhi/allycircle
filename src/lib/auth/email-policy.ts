@@ -1,4 +1,6 @@
-/** Email confirmation is required in production once a mail provider is configured. */
+import { canDeliverEmail } from "@/lib/integrations/email";
+
+/** Only require inbox confirmation once Resend can actually deliver to anyone. */
 export function emailVerificationRequired() {
-  return process.env.NODE_ENV === "production" && Boolean(process.env.RESEND_API_KEY);
+  return process.env.NODE_ENV === "production" && canDeliverEmail();
 }

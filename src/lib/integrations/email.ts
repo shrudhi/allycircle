@@ -4,6 +4,15 @@ export function isEmailConfigured() {
   return Boolean(process.env.RESEND_API_KEY);
 }
 
+/** Resend’s test address (onboarding@resend.dev) only reaches the Resend account owner. */
+export function canDeliverEmail() {
+  const from = process.env.EMAIL_FROM || "";
+  if (!process.env.RESEND_API_KEY) return false;
+  if (!from.includes("@")) return false;
+  if (/resend\.dev/i.test(from)) return false;
+  return true;
+}
+
 export async function sendTransactionalEmail(input: {
   to: string;
   subject: string;
@@ -38,7 +47,8 @@ export async function sendTransactionalEmail(input: {
   });
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(`Resend failed (${response.status}): ${detail.slice(0, 300)}`);
+    console.error(`[email] Resend failed (${response.status}): ${detail.slice(0, 300)}`);
+    return { sent: false as const, reason: "provider_error" as const };
   }
   return { sent: true as const };
 }

@@ -29,27 +29,35 @@ function createAuth(db: Awaited<ReturnType<typeof getDb>>) {
       enabled: true,
       requireEmailVerification: emailVerificationRequired(),
       sendResetPassword: async ({ user, url }) => {
-        await notify({
-          userId: user.id,
-          type: "password_reset",
-          title: "Reset your AllyCircle password",
-          body: "Use this link to choose a new password. If you didn't ask for this, you can ignore the email.",
-          href: url,
-          email: { to: user.email, subject: "Reset your AllyCircle password" },
-        });
-        await track(analyticsEvents.auth_password_reset_requested, { userId: user.id });
+        try {
+          await notify({
+            userId: user.id,
+            type: "password_reset",
+            title: "Reset your AllyCircle password",
+            body: "Use this link to choose a new password. If you didn't ask for this, you can ignore the email.",
+            href: url,
+            email: { to: user.email, subject: "Reset your AllyCircle password" },
+          });
+          await track(analyticsEvents.auth_password_reset_requested, { userId: user.id });
+        } catch (error) {
+          console.error("[auth] password reset email failed", error);
+        }
       },
     },
     emailVerification: {
       sendVerificationEmail: async ({ user, url }) => {
-        await notify({
-          userId: user.id,
-          type: "verify_email",
-          title: "Confirm your email",
-          body: "Confirm your email to start finding practice partners.",
-          href: url,
-          email: { to: user.email, subject: "Confirm your AllyCircle email" },
-        });
+        try {
+          await notify({
+            userId: user.id,
+            type: "verify_email",
+            title: "Confirm your email",
+            body: "Confirm your email to start finding practice partners.",
+            href: url,
+            email: { to: user.email, subject: "Confirm your AllyCircle email" },
+          });
+        } catch (error) {
+          console.error("[auth] verification email failed", error);
+        }
       },
     },
     socialProviders: googleConfigured
