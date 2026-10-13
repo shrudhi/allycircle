@@ -20,6 +20,7 @@ import {
 } from "@/lib/domain/scheduling";
 import { isRequestExpired, requestExpiryAt, type RequestFormat } from "@/lib/domain/types";
 import { enqueueJob, processJobs, scheduleSessionReminders } from "@/lib/server/jobs";
+import { displayName, loadProfilesByIds } from "@/lib/server/people";
 import { activeSessionBusyRanges, calendarBusyRanges, pairAllowed } from "@/lib/server/safety";
 
 async function eligibilityPair(requesterId: string, receiverId: string) {
@@ -467,16 +468,17 @@ export async function listRequests() {
       row.state = "expired";
     }
   }
-  const profilesRows = await db.select().from(profiles);
+  const people = await loadProfilesByIds(
+    rows.map((row) => (row.requesterId === current.id ? row.receiverId : row.requesterId))
+  );
   return rows
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     .map((row) => {
       const otherId = row.requesterId === current.id ? row.receiverId : row.requesterId;
-      const other = profilesRows.find((profile) => profile.userId === otherId);
       return {
         ...row,
         direction: row.requesterId === current.id ? "sent" : "received",
-        otherName: other?.fullName || "Ally",
+        otherName: displayName(people, otherId),
       };
     });
 }

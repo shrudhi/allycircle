@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { productConfig } from "@/lib/config/product";
 import { professionalFields, resolveProfessionalField } from "@/lib/config/fields";
@@ -33,24 +33,33 @@ import {
 } from "@/lib/domain/scheduling";
 import { weekdayInTimeZone, isoDateInTimeZone } from "@/lib/domain/timezone";
 import { pairAllowed } from "@/lib/server/safety";
+import { displayName, loadProfilesByIds } from "@/lib/server/people";
 
 async function pastConnectionIds(userId: string) {
   const db = await getDb();
   const ids = new Set<string>();
-  const sessions = await db.select().from(practiceSessions);
+  const [sessions, requests, threads] = await Promise.all([
+    db
+      .select({ requesterId: practiceSessions.requesterId, receiverId: practiceSessions.receiverId })
+      .from(practiceSessions)
+      .where(or(eq(practiceSessions.requesterId, userId), eq(practiceSessions.receiverId, userId))!),
+    db
+      .select({ requesterId: practiceRequests.requesterId, receiverId: practiceRequests.receiverId })
+      .from(practiceRequests)
+      .where(or(eq(practiceRequests.requesterId, userId), eq(practiceRequests.receiverId, userId))!),
+    db
+      .select({ userLowId: conversations.userLowId, userHighId: conversations.userHighId })
+      .from(conversations)
+      .where(or(eq(conversations.userLowId, userId), eq(conversations.userHighId, userId))!),
+  ]);
   for (const row of sessions) {
-    if (row.requesterId === userId) ids.add(row.receiverId);
-    if (row.receiverId === userId) ids.add(row.requesterId);
+    ids.add(row.requesterId === userId ? row.receiverId : row.requesterId);
   }
-  const requests = await db.select().from(practiceRequests);
   for (const row of requests) {
-    if (row.requesterId === userId) ids.add(row.receiverId);
-    if (row.receiverId === userId) ids.add(row.requesterId);
+    ids.add(row.requesterId === userId ? row.receiverId : row.requesterId);
   }
-  const threads = await db.select().from(conversations);
   for (const row of threads) {
-    if (row.userLowId === userId) ids.add(row.userHighId);
-    if (row.userHighId === userId) ids.add(row.userLowId);
+    ids.add(row.userLowId === userId ? row.userHighId : row.userLowId);
   }
   ids.delete(userId);
   return ids;
@@ -99,7 +108,7 @@ export async function findAllies(input: {
   const db = await getDb();
   const now = await getNow();
   const viewer = current.profile;
-  const allProfiles = await db.select().from(profiles);
+  const allProfiles = await db.select().from(profiles).where(eq(profiles.onboardingComplete, true));
   const topics = await db.select().from(userTopics);
   const saved = await db.select().from(savedAllies).where(eq(savedAllies.viewerId, current.id));
   const savedIds = new Set(saved.map((row) => row.allyId));
@@ -422,18 +431,23 @@ export async function getHomeData() {
   }
   const db = await getDb();
   const now = await getNow();
-  const upcoming = await db
-    .select()
-    .from(practiceSessions)
-    .where(eq(practiceSessions.requesterId, current.id));
-  const upcomingB = await db
-    .select()
-    .from(practiceSessions)
-    .where(eq(practiceSessions.receiverId, current.id));
-  const allSessions = [...upcoming, ...upcomingB].filter(
-    (row, index, all) => all.findIndex((item) => item.id === row.id) === index
+  const [allSessions, pendingRows] = await Promise.all([
+    db
+      .select()
+      .from(practiceSessions)
+      .where(or(eq(practiceSessions.requesterId, current.id), eq(practiceSessions.receiverId, current.id))!),
+    db
+      .select()
+      .from(practiceRequests)
+      .where(or(eq(practiceRequests.requesterId, current.id), eq(practiceRequests.receiverId, current.id))!),
+  ]);
+  const pending = pendingRows.filter((row) =>
+    ["pending", "alternate_time_proposed", "time_unavailable"].includes(row.state)
   );
-  const people = await db.select().from(profiles);
+  const people = await loadProfilesByIds([
+    ...allSessions.map((row) => (row.requesterId === current.id ? row.receiverId : row.requesterId)),
+    ...pending.map((row) => (row.requesterId === current.id ? row.receiverId : row.requesterId)),
+  ]);
   const sessions = allSessions
     .filter((row) => row.state === "scheduled" || row.state === "awaiting_attendance")
     .filter((row) => row.endUtc.getTime() >= now.getTime())
@@ -442,19 +456,17 @@ export async function getHomeData() {
       const otherId = row.requesterId === current.id ? row.receiverId : row.requesterId;
       return {
         ...row,
-        otherName: people.find((item) => item.userId === otherId)?.fullName || "Ally",
+        otherName: displayName(people, otherId),
         otherId,
       };
     });
-  const pending = (await db.select().from(practiceRequests))
-    .filter((row) => row.requesterId === current.id || row.receiverId === current.id)
-    .filter((row) => ["pending", "alternate_time_proposed", "time_unavailable"].includes(row.state))
+  const pendingMapped = pending
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     .map((row) => {
       const otherId = row.requesterId === current.id ? row.receiverId : row.requesterId;
       return {
         ...row,
-        otherName: people.find((item) => item.userId === otherId)?.fullName || "Ally",
+        otherName: displayName(people, otherId),
         otherId,
         direction: row.requesterId === current.id ? "sent" : "received",
       };
@@ -465,9 +477,9 @@ export async function getHomeData() {
     fieldLabel: fieldLabel(current.profile.fieldId, current.profile.fieldCustom),
     nextSession: sessions[0] || null,
     upcomingSessions: sessions,
-    pendingRequests: pending,
+    pendingRequests: pendingMapped,
     takingABreak: !current.profile.openToBeInterviewed && !current.profile.openToInterviewOthers,
-    isNew: allSessions.length === 0 && pending.length === 0,
+    isNew: allSessions.length === 0 && pendingMapped.length === 0,
   };
 }
 
@@ -475,20 +487,25 @@ export async function getRecordData() {
   const current = await requireMarketplaceUser();
   const db = await getDb();
   const interviewsGiven = await interviewsConductedCount(current.id);
-  const requests = await db.select().from(practiceRequests);
-  const people = await db.select().from(profiles);
-  const nameFor = (userId: string) => people.find((row) => row.userId === userId)?.fullName || "Ally";
-  const mine = requests.filter((row) => row.requesterId === current.id || row.receiverId === current.id);
-  const pending = mine
+  const requests = await db
+    .select()
+    .from(practiceRequests)
+    .where(or(eq(practiceRequests.requesterId, current.id), eq(practiceRequests.receiverId, current.id))!);
+  const notes = await db.select().from(feedback).where(eq(feedback.toUserId, current.id));
+  const quotes = await db.select().from(testimonials).where(eq(testimonials.toUserId, current.id));
+  const likes = await db.select().from(superLikes).where(eq(superLikes.toUserId, current.id));
+  const people = await loadProfilesByIds([
+    ...requests.map((row) => (row.requesterId === current.id ? row.receiverId : row.requesterId)),
+    ...notes.map((row) => row.fromUserId),
+  ]);
+  const nameFor = (userId: string) => displayName(people, userId);
+  const pending = requests
     .filter((row) => ["pending", "alternate_time_proposed", "time_unavailable"].includes(row.state))
     .map((row) => ({
       ...row,
       otherName: nameFor(row.requesterId === current.id ? row.receiverId : row.requesterId),
       direction: row.requesterId === current.id ? "sent" : "received",
     }));
-  const notes = await db.select().from(feedback).where(eq(feedback.toUserId, current.id));
-  const quotes = await db.select().from(testimonials).where(eq(testimonials.toUserId, current.id));
-  const likes = await db.select().from(superLikes).where(eq(superLikes.toUserId, current.id));
   return {
     interviewsGiven,
     pending,

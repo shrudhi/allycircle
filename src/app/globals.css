@@ -91,7 +91,7 @@
 }
 
 .elevator-rise {
-  animation: elevator-rise 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: elevator-rise 160ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes elevator-rise {

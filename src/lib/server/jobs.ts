@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, lte } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { analyticsEvents } from "@/lib/analytics/taxonomy";
 import { notify, track } from "@/lib/analytics/track";
@@ -65,8 +65,10 @@ export async function scheduleSessionReminders(sessionId: string, startUtc: Date
 export async function processJobs() {
   const db = await getDb();
   const now = await getNow();
-  const queued = await db.select().from(jobs);
-  const due = queued.filter((job) => job.status === "queued" && job.runAt.getTime() <= now.getTime());
+  const due = await db
+    .select()
+    .from(jobs)
+    .where(and(eq(jobs.status, "queued"), lte(jobs.runAt, now)));
   for (const job of due) {
     await db
       .update(jobs)

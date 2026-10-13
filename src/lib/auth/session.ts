@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
@@ -6,7 +7,7 @@ import { emailVerificationRequired } from "@/lib/auth/email-policy";
 import { getDb } from "@/lib/db";
 import { profiles, user } from "@/lib/db/schema";
 
-export async function getSessionUser() {
+export const getSessionUser = cache(async function getSessionUser() {
   const auth = await getAuth();
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) return null;
@@ -23,7 +24,7 @@ export async function getSessionUser() {
   }
   const [profile] = await db.select().from(profiles).where(eq(profiles.userId, account.id)).limit(1);
   return { ...account, profile };
-}
+});
 
 export async function requireSessionUser() {
   const current = await getSessionUser();

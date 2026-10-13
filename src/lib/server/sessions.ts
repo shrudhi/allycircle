@@ -1,4 +1,4 @@
-import { and, desc, eq, or } from "drizzle-orm";
+import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { analyticsEvents } from "@/lib/analytics/taxonomy";
 import { markMeaningful, notify, track } from "@/lib/analytics/track";
@@ -28,6 +28,7 @@ import {
 } from "@/lib/domain/scheduling";
 import type { RequestFormat } from "@/lib/domain/types";
 import { enqueueJob, processJobs, scheduleSessionReminders } from "@/lib/server/jobs";
+import { displayName, loadProfilesByIds } from "@/lib/server/people";
 import { activeSessionBusyRanges, calendarBusyRanges, pairAllowed } from "@/lib/server/safety";
 
 function pairIds(a: string, b: string) {
@@ -99,28 +100,34 @@ export async function listConversations() {
     .select()
     .from(conversations)
     .where(or(eq(conversations.userLowId, current.id), eq(conversations.userHighId, current.id))!);
-  const people = await db.select().from(profiles);
+  const otherIds = rows.map((row) => (row.userLowId === current.id ? row.userHighId : row.userLowId));
+  const people = await loadProfilesByIds(otherIds);
   const reads = await db.select().from(conversationReads).where(eq(conversationReads.userId, current.id));
   const readMap = new Map(reads.map((row) => [row.conversationId, row.lastReadAt]));
-  const allMessages = await db.select().from(messages);
+  const threadMessages = rows.length
+    ? await db
+        .select()
+        .from(messages)
+        .where(inArray(messages.conversationId, rows.map((row) => row.id)))
+    : [];
   return rows
     .sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime())
     .map((row) => {
       const otherId = row.userLowId === current.id ? row.userHighId : row.userLowId;
       const lastRead = readMap.get(row.id);
-      const unread = allMessages.some(
+      const unread = threadMessages.some(
         (message) =>
           message.conversationId === row.id &&
           message.senderId !== current.id &&
           (!lastRead || message.createdAt.getTime() > lastRead.getTime())
       );
-      const last = allMessages
+      const last = threadMessages
         .filter((message) => message.conversationId === row.id)
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
       return {
         ...row,
         otherId,
-        otherName: people.find((profile) => profile.userId === otherId)?.fullName || "Ally",
+        otherName: displayName(people, otherId),
         unread,
         lastPreview: last?.body || "",
       };
@@ -139,7 +146,7 @@ export async function listMessages(conversationId: string) {
   }
   const otherId = conversation.userLowId === current.id ? conversation.userHighId : conversation.userLowId;
   const blocked = !(await pairAllowed(current.id, otherId));
-  const people = await db.select().from(profiles);
+  const people = await loadProfilesByIds([otherId]);
   const thread = await db
     .select()
     .from(messages)
@@ -160,7 +167,7 @@ export async function listMessages(conversationId: string) {
   return {
     conversationId,
     otherId,
-    otherName: people.find((profile) => profile.userId === otherId)?.fullName || "Ally",
+    otherName: displayName(people, otherId),
     canReply: !blocked,
     messages: thread,
   };
@@ -174,14 +181,16 @@ export async function listMySessions() {
     .select()
     .from(practiceSessions)
     .where(or(eq(practiceSessions.requesterId, current.id), eq(practiceSessions.receiverId, current.id))!);
-  const people = await db.select().from(profiles);
+  const people = await loadProfilesByIds(
+    rows.map((row) => (row.requesterId === current.id ? row.receiverId : row.requesterId))
+  );
   return rows
     .sort((a, b) => b.startUtc.getTime() - a.startUtc.getTime())
     .map((row) => {
       const otherId = row.requesterId === current.id ? row.receiverId : row.requesterId;
       return {
         ...row,
-        otherName: people.find((profile) => profile.userId === otherId)?.fullName || "Ally",
+        otherName: displayName(people, otherId),
         otherId,
         joinOpen: isJoinWindowOpen({ startUtc: row.startUtc, endUtc: row.endUtc, now }),
         isPast: row.endUtc.getTime() < now.getTime(),
@@ -197,8 +206,8 @@ export async function getSessionDetail(sessionId: string) {
   if (!session || (session.requesterId !== current.id && session.receiverId !== current.id)) {
     throw new Error("You don’t have access to this session.");
   }
-  const people = await db.select().from(profiles);
   const otherId = session.requesterId === current.id ? session.receiverId : session.requesterId;
+  const people = await loadProfilesByIds([otherId]);
   const joinOpen = isJoinWindowOpen({ startUtc: session.startUtc, endUtc: session.endUtc, now });
   const likes = await db.select().from(superLikes).where(eq(superLikes.sessionId, sessionId));
   const alreadySuperLiked = likes.some((row) => row.fromUserId === current.id);
@@ -210,7 +219,7 @@ export async function getSessionDetail(sessionId: string) {
   });
   return {
     session,
-    otherName: people.find((profile) => profile.userId === otherId)?.fullName || "Ally",
+    otherName: displayName(people, otherId),
     otherId,
     joinOpen,
     isPast: session.endUtc.getTime() <= now.getTime(),
@@ -548,32 +557,40 @@ export async function getInteraction(otherId: string) {
   const now = await getNow();
   const [other] = await db.select().from(profiles).where(eq(profiles.userId, otherId));
   if (!other) throw new Error("We couldn’t find that person.");
-  const requests = (await db.select().from(practiceRequests)).filter(
-    (row) =>
-      (row.requesterId === current.id && row.receiverId === otherId) ||
-      (row.receiverId === current.id && row.requesterId === otherId)
-  );
-  const sessions = (await db.select().from(practiceSessions)).filter(
-    (row) =>
-      (row.requesterId === current.id && row.receiverId === otherId) ||
-      (row.receiverId === current.id && row.requesterId === otherId)
-  );
+  const pairFilter = or(
+    and(eq(practiceRequests.requesterId, current.id), eq(practiceRequests.receiverId, otherId)),
+    and(eq(practiceRequests.requesterId, otherId), eq(practiceRequests.receiverId, current.id))
+  )!;
+  const sessionFilter = or(
+    and(eq(practiceSessions.requesterId, current.id), eq(practiceSessions.receiverId, otherId)),
+    and(eq(practiceSessions.requesterId, otherId), eq(practiceSessions.receiverId, current.id))
+  )!;
+  const [requests, sessions] = await Promise.all([
+    db.select().from(practiceRequests).where(pairFilter),
+    db.select().from(practiceSessions).where(sessionFilter),
+  ]);
   const requestIds = requests.map((row) => row.id);
   const events = requestIds.length
-    ? (await db.select().from(requestEvents)).filter((row) => requestIds.includes(row.requestId))
+    ? await db.select().from(requestEvents).where(inArray(requestEvents.requestId, requestIds))
     : [];
-  const notes = await db.select().from(feedback);
-  const quotes = await db.select().from(testimonials);
-  const relatedFeedback = notes.filter(
-    (row) =>
-      (row.fromUserId === current.id && row.toUserId === otherId) ||
-      (row.fromUserId === otherId && row.toUserId === current.id)
-  );
-  const relatedQuotes = quotes.filter(
-    (row) =>
-      (row.fromUserId === current.id && row.toUserId === otherId) ||
-      (row.fromUserId === otherId && row.toUserId === current.id)
-  );
+  const relatedFeedback = await db
+    .select()
+    .from(feedback)
+    .where(
+      or(
+        and(eq(feedback.fromUserId, current.id), eq(feedback.toUserId, otherId)),
+        and(eq(feedback.fromUserId, otherId), eq(feedback.toUserId, current.id))
+      )!
+    );
+  const relatedQuotes = await db
+    .select()
+    .from(testimonials)
+    .where(
+      or(
+        and(eq(testimonials.fromUserId, current.id), eq(testimonials.toUserId, otherId)),
+        and(eq(testimonials.fromUserId, otherId), eq(testimonials.toUserId, current.id))
+      )!
+    );
   let thread = null as Awaited<ReturnType<typeof listMessages>> | null;
   try {
     const conversation = await getOrCreateConversation(otherId);

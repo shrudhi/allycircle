@@ -1,7 +1,7 @@
 import { cache } from "react";
-import { eq, or } from "drizzle-orm";
-import { requireMarketplaceUser } from "@/lib/auth/session";
-import { getDb, getNow } from "@/lib/db";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { getSessionUser } from "@/lib/auth/session";
+import { getDb } from "@/lib/db";
 import {
   conversationReads,
   conversations,
@@ -12,28 +12,58 @@ import {
 } from "@/lib/db/schema";
 
 async function loadAttentionCounts() {
-  const current = await requireMarketplaceUser();
+  const current = await getSessionUser();
+  if (!current?.profile?.onboardingComplete) {
+    return {
+      unreadMessages: 0,
+      unreadNotifications: 0,
+      receivedAction: 0,
+      sentAction: 0,
+      practiceAction: 0,
+      unreadByOther: new Set<string>(),
+      now: new Date(),
+    };
+  }
   const db = await getDb();
-  const now = await getNow();
-
-  const notes = await db.select().from(notifications).where(eq(notifications.userId, current.id));
-  const unreadNotifications = notes.filter((row) => !row.readAt).length;
+  const now = new Date();
 
   const threads = await db
-    .select()
+    .select({
+      id: conversations.id,
+      userLowId: conversations.userLowId,
+      userHighId: conversations.userHighId,
+    })
     .from(conversations)
     .where(or(eq(conversations.userLowId, current.id), eq(conversations.userHighId, current.id))!);
-  let reads: { conversationId: string; lastReadAt: Date }[] = [];
-  try {
-    reads = await db.select().from(conversationReads).where(eq(conversationReads.userId, current.id));
-  } catch {
-    reads = [];
-  }
+
+  const [unreadNotes, reads, requests, sessions] = await Promise.all([
+    db
+      .select({ id: notifications.id })
+      .from(notifications)
+      .where(and(eq(notifications.userId, current.id), isNull(notifications.readAt))),
+    db.select().from(conversationReads).where(eq(conversationReads.userId, current.id)),
+    db
+      .select()
+      .from(practiceRequests)
+      .where(or(eq(practiceRequests.requesterId, current.id), eq(practiceRequests.receiverId, current.id))!),
+    db
+      .select()
+      .from(practiceSessions)
+      .where(or(eq(practiceSessions.requesterId, current.id), eq(practiceSessions.receiverId, current.id))!),
+  ]);
+
   const readMap = new Map(reads.map((row) => [row.conversationId, row.lastReadAt]));
   const unreadByOther = new Set<string>();
   let unreadMessages = 0;
   if (threads.length) {
-    const threadMessages = await db.select().from(messages);
+    const threadMessages = await db
+      .select({
+        conversationId: messages.conversationId,
+        senderId: messages.senderId,
+        createdAt: messages.createdAt,
+      })
+      .from(messages)
+      .where(inArray(messages.conversationId, threads.map((thread) => thread.id)));
     for (const thread of threads) {
       const otherId = thread.userLowId === current.id ? thread.userHighId : thread.userLowId;
       const lastRead = readMap.get(thread.id);
@@ -49,15 +79,6 @@ async function loadAttentionCounts() {
       }
     }
   }
-
-  const requests = await db
-    .select()
-    .from(practiceRequests)
-    .where(or(eq(practiceRequests.requesterId, current.id), eq(practiceRequests.receiverId, current.id))!);
-  const sessions = await db
-    .select()
-    .from(practiceSessions)
-    .where(or(eq(practiceSessions.requesterId, current.id), eq(practiceSessions.receiverId, current.id))!);
 
   const receivedAction = requests.filter((row) => {
     if (row.receiverId !== current.id) return false;
@@ -82,7 +103,7 @@ async function loadAttentionCounts() {
 
   return {
     unreadMessages,
-    unreadNotifications,
+    unreadNotifications: unreadNotes.length,
     receivedAction,
     sentAction,
     practiceAction: receivedAction + sentAction + sessionAction,
