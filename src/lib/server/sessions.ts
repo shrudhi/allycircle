@@ -29,7 +29,9 @@ import {
 import type { RequestFormat } from "@/lib/domain/types";
 import { enqueueJob, processJobs, scheduleSessionReminders } from "@/lib/server/jobs";
 import { displayName, loadProfilesByIds } from "@/lib/server/people";
-import { activeSessionBusyRanges, calendarBusyRanges, pairAllowed } from "@/lib/server/safety";
+import { assertSlotStillBookable } from "@/lib/server/availability";
+import { bookingLockIds, isBlockingSessionState } from "@/lib/domain/availability";
+import { activeSessionBusyRanges, calendarBusyState, pairAllowed } from "@/lib/server/safety";
 
 function pairIds(a: string, b: string) {
   return a < b ? [a, b] : [b, a];
@@ -247,11 +249,19 @@ async function assertSessionTimeFree(
   end: Date,
   excludeSessionId: string
 ) {
+  const requesterCal = await calendarBusyState(requesterId, undefined, { fresh: true });
+  const receiverCal = await calendarBusyState(receiverId, undefined, { fresh: true });
+  if (
+    (requesterCal.connected && !requesterCal.checked) ||
+    (receiverCal.connected && !receiverCal.checked)
+  ) {
+    throw new Error("We couldn’t verify calendar availability. Try again in a moment.");
+  }
   const busy = [
     ...(await activeSessionBusyRanges(requesterId, excludeSessionId)),
     ...(await activeSessionBusyRanges(receiverId, excludeSessionId)),
-    ...(await calendarBusyRanges(requesterId)),
-    ...(await calendarBusyRanges(receiverId)),
+    ...requesterCal.busy,
+    ...receiverCal.busy,
   ];
   if (busy.some((range) => rangesOverlap(start, end, range.start, range.end))) {
     throw new Error("That time was just booked. Pick another time that still works.");
@@ -282,6 +292,13 @@ export async function proposeReschedule(sessionId: string, startIso: string) {
   if (start.getTime() < earliest.getTime()) {
     throw new Error("Please pick a time at least 24 hours from now.");
   }
+  await assertSlotStillBookable({
+    hostId: session.receiverId,
+    guestId: session.requesterId,
+    format: session.format as RequestFormat,
+    startIso: start.toISOString(),
+    excludeSessionId: session.id,
+  });
   await assertSessionTimeFree(session.requesterId, session.receiverId, start, end, session.id);
   await db
     .update(practiceSessions)
@@ -334,17 +351,40 @@ export async function respondToReschedule(sessionId: string, action: "accept" | 
   const end = new Date(
     start.getTime() + sessionDurationMinutes(session.format as RequestFormat) * 60 * 1000
   );
-  await assertSessionTimeFree(session.requesterId, session.receiverId, start, end, session.id);
-  await db
-    .update(practiceSessions)
-    .set({
-      startUtc: start,
-      endUtc: end,
-      pendingRescheduleStartUtc: null,
-      pendingRescheduleBy: null,
-      updatedAt: now,
-    })
-    .where(eq(practiceSessions.id, sessionId));
+  await assertSlotStillBookable({
+    hostId: session.receiverId,
+    guestId: session.requesterId,
+    format: session.format as RequestFormat,
+    startIso: start.toISOString(),
+    excludeSessionId: session.id,
+  });
+  await db.transaction(async (tx) => {
+    for (const userId of bookingLockIds(session.requesterId, session.receiverId)) {
+      await tx.update(profiles).set({ updatedAt: now }).where(eq(profiles.userId, userId));
+    }
+    const existing = await tx.select().from(practiceSessions);
+    const overlap = existing
+      .filter((row) => isBlockingSessionState(row.state) && row.id !== session.id)
+      .filter(
+        (row) =>
+          row.requesterId === session.requesterId ||
+          row.receiverId === session.requesterId ||
+          row.requesterId === session.receiverId ||
+          row.receiverId === session.receiverId
+      )
+      .some((row) => rangesOverlap(start, end, row.startUtc, row.endUtc));
+    if (overlap) throw new Error("That time was just booked. Pick another time that still works.");
+    await tx
+      .update(practiceSessions)
+      .set({
+        startUtc: start,
+        endUtc: end,
+        pendingRescheduleStartUtc: null,
+        pendingRescheduleBy: null,
+        updatedAt: now,
+      })
+      .where(eq(practiceSessions.id, sessionId));
+  });
   await scheduleSessionReminders(sessionId, start, end);
   if (session.meetProvisionState !== "ready") {
     await enqueueJob("provision_meet", now, `meet:${sessionId}:${start.toISOString()}`, { sessionId });

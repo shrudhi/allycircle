@@ -4,15 +4,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
   saveProfileSetup,
-  addAvailabilityWindows,
-  removeAvailabilityWindow,
-  saveAvailabilityPeriod,
   connectMockCalendar,
   disconnectCalendar,
   submitFeedback,
   setTestimonialVisible,
   deleteAccount,
 } from "@/lib/server/profile";
+import { saveAvailabilitySchedule } from "@/lib/server/availability";
 import { toggleSaveAlly } from "@/lib/server/allies";
 import { createPracticeRequest, respondToRequest } from "@/lib/server/requests";
 import {
@@ -186,37 +184,71 @@ export async function testimonialVisibilityAction(formData: FormData) {
   revalidatePath("/record");
 }
 
-export async function availabilityAction(formData: FormData) {
-  const weekday = Number(formData.get("weekday"));
-  if (Number.isNaN(weekday) || weekday < 0 || weekday > 6) {
-    throw new Error("Choose a day.");
-  }
-  const starts = formData.getAll("startTime").map(String);
-  const ends = formData.getAll("endTime").map(String);
-  const windows = starts.map((start, index) => {
-    const startParts = start.split(":");
-    const endParts = String(ends[index] || "").split(":");
-    return {
-      weekday,
-      startMinutes: Number(startParts[0] || 0) * 60 + Number(startParts[1] || 0),
-      endMinutes: Number(endParts[0] || 0) * 60 + Number(endParts[1] || 0),
+export async function saveAvailabilityScheduleAction(formData: FormData) {
+  try {
+    const payload = JSON.parse(String(formData.get("payload") || "{}")) as {
+      windows?: { weekday: number; startMinutes: number; endMinutes: number; preferred?: boolean }[];
+      exceptions?: {
+        date: string;
+        kind: "blocked" | "custom";
+        startMinutes: number | null;
+        endMinutes: number | null;
+        preferred?: boolean;
+      }[];
+      prefs?: {
+        durationMinutes?: number;
+        slotIntervalMinutes?: number;
+        minNoticeHours?: number;
+        bufferBeforeMinutes?: number;
+        bufferAfterMinutes?: number;
+        maxPerDay?: number;
+        periodKind?: "this_week" | "next_7" | "this_month" | "next_30" | "custom" | "ongoing";
+      };
+      availableFrom?: string | null;
+      availableUntil?: string | null;
+      timezone?: string;
     };
-  });
-  await addAvailabilityWindows(windows);
-  revalidatePath("/settings");
+    await saveAvailabilitySchedule({
+      windows: payload.windows || [],
+      exceptions: payload.exceptions || [],
+      prefs: payload.prefs || {},
+      availableFrom: payload.availableFrom,
+      availableUntil: payload.availableUntil,
+      timezone: payload.timezone || String(formData.get("timezone") || ""),
+    });
+    revalidatePath("/settings");
+    redirect("/settings?schedule=saved#availability");
+  } catch (error) {
+    if (typeof error === "object" && error && "digest" in error) throw error;
+    const message = error instanceof Error ? error.message : "We couldn’t save your availability.";
+    redirect(`/settings?availabilityError=${encodeURIComponent(message)}#availability`);
+  }
 }
 
-export async function availabilityPeriodAction(formData: FormData) {
-  await saveAvailabilityPeriod({
-    from: String(formData.get("availableFrom") || "") || undefined,
-    until: String(formData.get("availableUntil") || "") || undefined,
-  });
-  revalidatePath("/settings");
-}
-
-export async function removeAvailabilityAction(formData: FormData) {
-  await removeAvailabilityWindow(String(formData.get("windowId")));
-  revalidatePath("/settings");
+export async function resetAvailabilityAction() {
+  try {
+    await saveAvailabilitySchedule({
+      windows: [],
+      exceptions: [],
+      prefs: {
+        durationMinutes: 30,
+        slotIntervalMinutes: 30,
+        minNoticeHours: 24,
+        bufferBeforeMinutes: 0,
+        bufferAfterMinutes: 0,
+        maxPerDay: 4,
+        periodKind: "ongoing",
+      },
+      availableFrom: null,
+      availableUntil: null,
+    });
+    revalidatePath("/settings");
+    redirect("/settings?schedule=reset#availability");
+  } catch (error) {
+    if (typeof error === "object" && error && "digest" in error) throw error;
+    const message = error instanceof Error ? error.message : "We couldn’t reset your availability.";
+    redirect(`/settings?availabilityError=${encodeURIComponent(message)}#availability`);
+  }
 }
 
 export async function setClockAction(formData: FormData) {

@@ -132,12 +132,25 @@ async function authorizedClient(userId: string) {
   return { client, connection };
 }
 
-export async function googleFreeBusyRanges(userId: string) {
+const freeBusyCache = new Map<string, { at: number; busy: { start: Date; end: Date }[] }>();
+const FREEBUSY_TTL_MS = 45_000;
+
+export async function googleFreeBusyRanges(
+  userId: string,
+  opts?: { timeMin?: Date; timeMax?: Date; skipCache?: boolean }
+) {
   const auth = await authorizedClient(userId);
-  if (!auth) return [];
+  if (!auth) throw new Error("CALENDAR_UNAUTHORIZED");
+  const now = opts?.timeMin || (await getNow());
+  const timeMax =
+    opts?.timeMax ||
+    new Date(now.getTime() + (productConfig.bookingHorizonDays + 2) * 24 * 60 * 60 * 1000);
+  const cacheKey = `${userId}:${now.toISOString().slice(0, 13)}:${timeMax.toISOString().slice(0, 10)}`;
+  const cached = freeBusyCache.get(cacheKey);
+  if (!opts?.skipCache && cached && Date.now() - cached.at < FREEBUSY_TTL_MS) {
+    return cached.busy;
+  }
   const calendar = google.calendar({ version: "v3", auth: auth.client });
-  const now = await getNow();
-  const timeMax = new Date(now.getTime() + (productConfig.bookingHorizonDays + 2) * 24 * 60 * 60 * 1000);
   const result = await calendar.freebusy.query({
     requestBody: {
       timeMin: now.toISOString(),
@@ -145,10 +158,15 @@ export async function googleFreeBusyRanges(userId: string) {
       items: [{ id: "primary" }],
     },
   });
-  const busy = result.data.calendars?.primary?.busy || [];
-  return busy
+  const busy = (result.data.calendars?.primary?.busy || [])
     .filter((item) => item.start && item.end)
     .map((item) => ({ start: new Date(item.start!), end: new Date(item.end!) }));
+  freeBusyCache.set(cacheKey, { at: Date.now(), busy });
+  return busy;
+}
+
+export function clearGoogleFreeBusyCache() {
+  freeBusyCache.clear();
 }
 
 export async function createGoogleMeetEvent(input: {

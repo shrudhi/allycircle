@@ -82,6 +82,20 @@ Do **not** paste secrets into chat. Put them in `.env.local` or your host’s se
 - History includes Practice again, which opens a new request with that ally
 - Photos are optional; initials show on cards when there isn’t one
 
+## Interview availability
+
+Settings → Interview availability is the place to publish weekly hours, date overrides, duration, notice, buffers, and timezone. Bookable times are never pre-materialized. The server availability engine:
+
+1. Loads each person’s period, weekly windows, date overrides, and interview preferences
+2. Generates candidate slots from those rules (duration must fit entirely inside a window, including buffers)
+3. Subtracts Google Calendar free/busy when a calendar is connected — a failed calendar check is treated as unknown, not free
+4. Subtracts confirmed AllyCircle sessions and pending requests for both people
+5. Intersects interviewer and candidate slots, then ranks a few recommended times
+
+The booking calendar only enables a date when at least one genuinely free slot exists. Confirming a request re-checks availability and locks both profile rows in a transaction so two accepts cannot create overlapping sessions.
+
+Outlook is not supported. Google Calendar remains optional: without it, times use AllyCircle hours and bookings only.
+
 ## Architecture
 
 Next.js App Router, TypeScript, Tailwind, shadcn/ui, Postgres (PGlite locally), Better Auth (email + Google), background jobs for Meet provisioning and reminders, first-party analytics events.

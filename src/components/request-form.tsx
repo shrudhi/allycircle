@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -9,6 +9,8 @@ export type BookableSlotView = {
   dateKey: string;
   dateLabel: string;
   timeLabel: string;
+  preferred?: boolean;
+  explanation?: string;
 };
 
 function monthCells(year: number, month: number) {
@@ -29,11 +31,19 @@ export function RequestForm({
   allyId,
   canSwap,
   interviewSlots,
+  recommended = [],
+  calendarStatus,
+  calendarError,
+  durationMinutes = 30,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   allyId: string;
   canSwap: boolean;
   interviewSlots: BookableSlotView[];
+  recommended?: BookableSlotView[];
+  calendarStatus?: "verified" | "internal_only" | "check_failed";
+  calendarError?: string;
+  durationMinutes?: number;
 }) {
   const byDate = useMemo(() => {
     const map = new Map<string, BookableSlotView[]>();
@@ -44,31 +54,30 @@ export function RequestForm({
     }
     return map;
   }, [interviewSlots]);
-  const [ready, setReady] = useState(false);
-  const [cursor, setCursor] = useState({ year: 2026, month: 8 });
+  const [cursor, setCursor] = useState(() => {
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() };
+  });
   const [dateKey, setDateKey] = useState("");
   const [startIso, setStartIso] = useState("");
   const [hint, setHint] = useState("");
+  const [showAll, setShowAll] = useState(recommended.length === 0);
   const times = dateKey ? byDate.get(dateKey) || [] : [];
   const title = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(
     new Date(cursor.year, cursor.month, 1)
   );
   const cells = monthCells(cursor.year, cursor.month);
-
-  useEffect(() => {
-    const now = new Date();
-    setCursor({ year: now.getFullYear(), month: now.getMonth() });
-    setReady(true);
-  }, []);
-
-  if (!ready) {
-    return <p className="mt-8 text-sm text-[#b3b3b3]">Loading calendar…</p>;
-  }
+  const blocked = calendarStatus === "check_failed";
 
   return (
     <form
       action={action}
       onSubmit={(event) => {
+        if (blocked) {
+          event.preventDefault();
+          setHint(calendarError || "We couldn’t verify calendar availability.");
+          return;
+        }
         if (!startIso) {
           event.preventDefault();
           setHint("Pick a date and time first.");
@@ -78,10 +87,55 @@ export function RequestForm({
     >
       <input type="hidden" name="allyId" value={allyId} />
       <input type="hidden" name="startIso" value={startIso} />
+      {calendarStatus === "verified" ? (
+        <p className="text-sm text-[#b3b3b3]">Times skip busy periods on connected calendars.</p>
+      ) : calendarStatus === "internal_only" ? (
+        <p className="text-sm text-[#b3b3b3]">
+          Times are based on AllyCircle hours and bookings. Connect Google Calendar to skip conflicts on an external calendar.
+        </p>
+      ) : blocked ? (
+        <p className="text-sm text-[#e07070]">{calendarError || "We couldn’t check a connected calendar. Try again in a moment."}</p>
+      ) : null}
+      {recommended.length ? (
+        <div>
+          <p className="text-xs uppercase tracking-[0.18em] text-[#d4af37]">Recommended</p>
+          <h2 className="mt-2 font-serif text-2xl">Times that work for both of you</h2>
+          <div className="mt-4 space-y-2">
+            {recommended.map((slot) => (
+              <button
+                key={slot.startIso}
+                type="button"
+                onClick={() => {
+                  setDateKey(slot.dateKey);
+                  setStartIso(slot.startIso);
+                  setHint("");
+                }}
+                className={`block w-full rounded-lg border px-3 py-3 text-left text-sm ${
+                  startIso === slot.startIso ? "border-[#d4af37] bg-[#d4af37] text-black" : "border-white/15"
+                }`}
+              >
+                <span className="font-medium">
+                  {slot.dateLabel} · {slot.timeLabel}
+                </span>
+                {slot.explanation ? (
+                  <span className={`mt-1 block text-xs ${startIso === slot.startIso ? "text-black/70" : "text-[#8a8a8a]"}`}>
+                    {slot.explanation}
+                  </span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+          <button type="button" className="mt-3 text-sm text-[#d4af37]" onClick={() => setShowAll((value) => !value)}>
+            {showAll ? "Hide the full calendar" : "View all bookable options"}
+          </button>
+        </div>
+      ) : null}
+      {showAll || recommended.length === 0 ? (
+        <>
       <div>
         <p className="text-xs uppercase tracking-[0.18em] text-[#d4af37]">Step 1</p>
         <h2 className="mt-2 font-serif text-2xl">Select a date</h2>
-        <p className="mt-1 text-sm text-[#b3b3b3]">Gold dates follow their published hours. Grey dates are closed.</p>
+        <p className="mt-1 text-sm text-[#b3b3b3]">Gold dates have at least one genuinely bookable slot. Grey dates are closed.</p>
         <div className="mt-4 flex items-center justify-between">
           <button
             type="button"
@@ -125,7 +179,7 @@ export function RequestForm({
               <button
                 key={cell.key}
                 type="button"
-                disabled={!open}
+                disabled={!open || blocked}
                 onClick={() => {
                   setDateKey(cell.key);
                   setStartIso("");
@@ -166,10 +220,12 @@ export function RequestForm({
       ) : (
         <p className="text-sm text-[#b3b3b3]">Choose an available date to see times.</p>
       )}
+        </>
+      ) : null}
       <div>
         <p className="text-xs uppercase tracking-[0.18em] text-[#d4af37]">Step 3</p>
         <h2 className="mt-2 font-serif text-2xl">Request details</h2>
-        <p className="mt-2 text-sm text-[#b3b3b3]">They interview you for 30 minutes.</p>
+        <p className="mt-2 text-sm text-[#b3b3b3]">They interview you for {durationMinutes} minutes.</p>
         {canSwap ? (
           <label className="mt-3 flex items-start gap-2 text-sm">
             <input type="checkbox" name="openToTwoWay" className="mt-1" />
@@ -183,7 +239,7 @@ export function RequestForm({
         />
       </div>
       {hint ? <p className="text-sm text-[#e07070]">{hint}</p> : null}
-      <button type="submit" className={cn(buttonVariants({ size: "lg" }), "gold-outline h-11 px-6")}>
+      <button type="submit" disabled={blocked} className={cn(buttonVariants({ size: "lg" }), "gold-outline h-11 px-6")}>
         Send request
       </button>
     </form>

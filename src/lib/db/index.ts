@@ -5,7 +5,7 @@ import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
 import { drizzle as drizzlePg } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "@/lib/db/schema";
-import { SCHEMA_SQL } from "@/lib/db/schema-sql";
+import { SCHEMA_SQL, SCHEDULING_PATCH_SQL } from "@/lib/db/schema-sql";
 import { timeOverrides } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import dns from "node:dns";
@@ -28,6 +28,7 @@ async function ensureHostedSchema(client: ReturnType<typeof postgres>) {
   try {
     const rows = await client`select to_regclass('public.profiles') as name`;
     if (rows[0]?.name) {
+      await client.unsafe(SCHEDULING_PATCH_SQL);
       globalForDb.schemaReady = true;
       return;
     }

@@ -28,31 +28,71 @@ export async function activeSessionBusyRanges(userId: string, excludeSessionId?:
     .map((row) => ({ start: row.startUtc, end: row.endUtc }));
 }
 
-export async function calendarBusyRanges(userId: string) {
+export type CalendarBusyState = {
+  connected: boolean;
+  checked: boolean;
+  provider: string | null;
+  busy: { start: Date; end: Date }[];
+  error?: string;
+};
+
+export async function calendarBusyState(
+  userId: string,
+  now?: Date,
+  opts?: { fresh?: boolean }
+): Promise<CalendarBusyState> {
   const db = await getDb();
   const [connection] = await db
     .select()
     .from(calendarConnections)
     .where(eq(calendarConnections.userId, userId))
     .limit(1);
-  if (!connection || connection.status !== "connected") return [];
+  if (!connection || connection.status !== "connected") {
+    return { connected: false, checked: true, provider: null, busy: [] };
+  }
   if (connection.encryptedRefreshToken || connection.encryptedAccessToken) {
     try {
       const { googleFreeBusyRanges } = await import("@/lib/integrations/google-calendar");
-      return await googleFreeBusyRanges(userId);
+      const busy = await googleFreeBusyRanges(userId, { timeMin: now, skipCache: opts?.fresh });
+      return { connected: true, checked: true, provider: connection.provider, busy };
     } catch {
-      return [];
+      return {
+        connected: true,
+        checked: false,
+        provider: connection.provider,
+        busy: [],
+        error: "We couldn’t check Google Calendar. Try again in a moment.",
+      };
     }
   }
   if (connection.mockBusyJson) {
     try {
       const parsed = JSON.parse(connection.mockBusyJson) as { start: string; end: string }[];
-      return parsed.map((item) => ({ start: new Date(item.start), end: new Date(item.end) }));
+      return {
+        connected: true,
+        checked: true,
+        provider: connection.provider,
+        busy: parsed.map((item) => ({ start: new Date(item.start), end: new Date(item.end) })),
+      };
     } catch {
-      return [];
+      return {
+        connected: true,
+        checked: false,
+        provider: connection.provider,
+        busy: [],
+        error: "The connected calendar could not be read.",
+      };
     }
   }
-  return [];
+  return { connected: true, checked: true, provider: connection.provider, busy: [] };
+}
+
+export async function calendarBusyRanges(userId: string, now?: Date) {
+  const state = await calendarBusyState(userId, now);
+  if (state.connected && !state.checked) {
+    throw new Error(state.error || "We couldn’t verify calendar availability.");
+  }
+  return state.busy;
 }
 
 export async function displayUser(userId: string) {

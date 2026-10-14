@@ -187,8 +187,39 @@ export const availabilityWindows = pgTable(
     weekday: integer("weekday").notNull(),
     startMinutes: integer("start_minutes").notNull(),
     endMinutes: integer("end_minutes").notNull(),
+    preferred: boolean("preferred").notNull().default(false),
   },
   (table) => [index("availability_user_idx").on(table.userId)]
+);
+
+export const availabilityPrefs = pgTable("availability_prefs", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  durationMinutes: integer("duration_minutes").notNull().default(30),
+  slotIntervalMinutes: integer("slot_interval_minutes").notNull().default(30),
+  minNoticeHours: integer("min_notice_hours").notNull().default(24),
+  bufferBeforeMinutes: integer("buffer_before_minutes").notNull().default(0),
+  bufferAfterMinutes: integer("buffer_after_minutes").notNull().default(0),
+  maxPerDay: integer("max_per_day").notNull().default(4),
+  periodKind: text("period_kind").notNull().default("ongoing"),
+  updatedAt: ts("updated_at").notNull(),
+});
+
+export const availabilityExceptions = pgTable(
+  "availability_exceptions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    onDate: text("on_date").notNull(),
+    kind: text("kind").notNull(),
+    startMinutes: integer("start_minutes"),
+    endMinutes: integer("end_minutes"),
+    preferred: boolean("preferred").notNull().default(false),
+  },
+  (table) => [index("availability_exceptions_user_idx").on(table.userId, table.onDate)]
 );
 
 export const calendarConnections = pgTable("calendar_connections", {

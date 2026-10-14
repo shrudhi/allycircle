@@ -3,14 +3,14 @@ import { AppShell } from "@/components/app-shell";
 import { getSessionUser } from "@/lib/auth/session";
 import { mySettings } from "@/lib/server/profile";
 import {
-  availabilityAction,
-  availabilityPeriodAction,
   connectCalendarAction,
   deleteAccountAction,
   disconnectCalendarAction,
-  removeAvailabilityAction,
+  resetAvailabilityAction,
+  saveAvailabilityScheduleAction,
   saveProfileAction,
 } from "@/app/actions/app";
+import { getMyAvailabilityConfig } from "@/lib/server/availability";
 import { ProfileForm } from "@/components/profile-form";
 import { AvailabilityEditor } from "@/components/availability-editor";
 import { Button } from "@/components/ui/button";
@@ -22,12 +22,13 @@ import Link from "next/link";
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ calendar?: string; error?: string }>;
+  searchParams: Promise<{ calendar?: string; error?: string; schedule?: string; availabilityError?: string }>;
 }) {
   const current = await getSessionUser();
   if (!current?.profile) redirect("/login");
   const settings = await mySettings();
-  const { calendar, error } = await searchParams;
+  const schedule = await getMyAvailabilityConfig();
+  const { calendar, error, schedule: scheduleState, availabilityError } = await searchParams;
   const calendarLive = isGoogleCalendarConfigured();
   const live = integrationStatus();
   const calendarMessage =
@@ -132,18 +133,24 @@ export default async function SettingsPage({
         </ul>
       </section>
 
-      <section className="mt-8 rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-6">
+      <section id="availability" className="mt-8 rounded-2xl border border-[#2d2d2d] bg-[#1e1e1e] p-6">
         <h2 className="font-serif text-2xl">Interview availability</h2>
         <p className="mb-4 mt-2 text-sm text-[#b3b3b3]">
-          Set the date window you want to be recommended in, then publish different hours for different weekdays. There is no single from–to range for the whole week.
+          Set when you can interview or be interviewed. Peers only see times that are still free after your hours, date overrides, AllyCircle bookings, and a connected calendar.
         </p>
         <AvailabilityEditor
-          action={availabilityAction}
-          removeAction={removeAvailabilityAction}
-          periodAction={availabilityPeriodAction}
-          windows={settings.windows}
-          availableFrom={settings.profile.availableFrom}
-          availableUntil={settings.profile.availableUntil}
+          action={saveAvailabilityScheduleAction}
+          resetAction={resetAvailabilityAction}
+          timezone={schedule.timezone}
+          windows={schedule.windows}
+          exceptions={schedule.exceptions}
+          prefs={schedule.prefs}
+          availableFrom={schedule.availableFrom}
+          availableUntil={schedule.availableUntil}
+          previewDates={schedule.previewDates}
+          calendar={schedule.calendar}
+          formError={availabilityError}
+          saved={scheduleState === "saved" || scheduleState === "reset"}
         />
       </section>
 

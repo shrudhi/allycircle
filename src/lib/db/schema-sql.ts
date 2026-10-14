@@ -1,3 +1,28 @@
+export const SCHEDULING_PATCH_SQL = `
+ALTER TABLE availability_windows ADD COLUMN IF NOT EXISTS preferred boolean NOT NULL DEFAULT false;
+CREATE TABLE IF NOT EXISTS availability_prefs (
+  user_id text PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE,
+  duration_minutes integer NOT NULL DEFAULT 30,
+  slot_interval_minutes integer NOT NULL DEFAULT 30,
+  min_notice_hours integer NOT NULL DEFAULT 24,
+  buffer_before_minutes integer NOT NULL DEFAULT 0,
+  buffer_after_minutes integer NOT NULL DEFAULT 0,
+  max_per_day integer NOT NULL DEFAULT 4,
+  period_kind text NOT NULL DEFAULT 'ongoing',
+  updated_at timestamptz NOT NULL
+);
+CREATE TABLE IF NOT EXISTS availability_exceptions (
+  id text PRIMARY KEY,
+  user_id text NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+  on_date text NOT NULL,
+  kind text NOT NULL,
+  start_minutes integer,
+  end_minutes integer,
+  preferred boolean NOT NULL DEFAULT false
+);
+CREATE INDEX IF NOT EXISTS availability_exceptions_user_idx ON availability_exceptions(user_id, on_date);
+`;
+
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS "user" (
   id text PRIMARY KEY,
@@ -277,4 +302,5 @@ CREATE TABLE IF NOT EXISTS super_likes (
   created_at timestamptz NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS super_likes_session_from_idx ON super_likes(session_id, from_user_id);
+${SCHEDULING_PATCH_SQL}
 `;

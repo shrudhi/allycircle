@@ -127,7 +127,10 @@ export function isoDateInTimeZone(date: Date, timeZone: string) {
   return `${parts.year}-${pad(parts.month)}-${pad(parts.day)}`;
 }
 
-export function slotPickerViews(slots: { startUtc: Date }[], timeZone: string) {
+export function slotPickerViews(
+  slots: { startUtc: Date; preferred?: boolean; reasons?: string[] }[],
+  timeZone: string
+) {
   return slots.map((slot) => ({
     startIso: slot.startUtc.toISOString(),
     dateKey: isoDateInTimeZone(slot.startUtc, timeZone),
@@ -142,5 +145,7 @@ export function slotPickerViews(slots: { startUtc: Date }[], timeZone: string) {
       hour: "numeric",
       minute: "2-digit",
     }).format(slot.startUtc),
+    preferred: Boolean(slot.preferred),
+    reasons: slot.reasons || [],
   }));
 }

@@ -13,7 +13,11 @@ export default async function RequestDetailPage({ params }: { params: Promise<{ 
   if (!current?.profile) redirect("/login");
   const { id } = await params;
   const data = await getRequestDetail(id);
-  const slots = await listSlotsForAlly(data.otherId, "interview_me");
+  const listing = await listSlotsForAlly(data.otherId, "interview_me", {
+    hostId: data.request.receiverId,
+    guestId: data.request.requesterId,
+  });
+  const slots = listing.slots;
   const actionable = ["pending", "alternate_time_proposed"].includes(data.request.state);
 
   return (
@@ -105,16 +109,25 @@ export default async function RequestDetailPage({ params }: { params: Promise<{ 
           <input type="hidden" name="requestId" value={id} />
           <input type="hidden" name="action" value="propose" />
           <p className="text-sm">Suggest another time</p>
-          <select name="startIso" className="h-9 w-full rounded-lg border border-[#2d2d2d] bg-[#111] px-2 text-sm" required>
-            {slots.map((slot) => (
-              <option key={slot.startUtc.toISOString()} value={slot.startUtc.toISOString()}>
-                {formatInTimeZone(slot.startUtc, current.profile.timezone)}
-              </option>
-            ))}
-          </select>
-          <Button type="submit" variant="outline">
-            Send new time
-          </Button>
+          {listing.calendarStatus === "check_failed" ? (
+            <p className="text-sm text-[#e07070]">{listing.calendarError}</p>
+          ) : null}
+          {slots.length ? (
+            <>
+              <select name="startIso" className="h-9 w-full rounded-lg border border-[#2d2d2d] bg-[#111] px-2 text-sm" required>
+                {slots.map((slot) => (
+                  <option key={slot.startUtc.toISOString()} value={slot.startUtc.toISOString()}>
+                    {formatInTimeZone(slot.startUtc, current.profile.timezone)}
+                  </option>
+                ))}
+              </select>
+              <Button type="submit" variant="outline">
+                Send new time
+              </Button>
+            </>
+          ) : (
+            <p className="text-sm text-[#a0a0a0]">No mutually free times right now. Try another day, or wait until hours are updated.</p>
+          )}
         </form>
       ) : null}
       <a href={`/practice/with/${data.otherId}`} className="mt-6 inline-block text-sm text-[#d4af37]">

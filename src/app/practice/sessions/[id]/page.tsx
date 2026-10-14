@@ -26,10 +26,14 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const { id } = await params;
   const data = await getSessionDetail(id);
   const { session } = data;
-  const slots =
-    data.canProposeReschedule
-      ? await listSlotsForAlly(data.otherId, session.format as RequestFormat, { excludeSessionId: id })
-      : [];
+  const listing = data.canProposeReschedule
+    ? await listSlotsForAlly(data.otherId, session.format as RequestFormat, {
+        excludeSessionId: id,
+        hostId: session.interviewerId || session.receiverId,
+        guestId: session.candidateId || session.requesterId,
+      })
+    : null;
+  const slots = listing?.slots || [];
 
   return (
     <AppShell name={current.profile.fullName}>

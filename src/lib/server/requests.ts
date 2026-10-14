@@ -11,7 +11,7 @@ import {
   requestEvents,
   user,
 } from "@/lib/db/schema";
-import { generateBookableSlots } from "@/lib/domain/availability";
+import { bookingLockIds, isBlockingSessionState } from "@/lib/domain/availability";
 import { canInterview, canOfferReciprocalSwap } from "@/lib/domain/eligibility";
 import {
   convertedOneWayTimes,
@@ -21,7 +21,8 @@ import {
 import { isRequestExpired, requestExpiryAt, type RequestFormat } from "@/lib/domain/types";
 import { enqueueJob, processJobs, scheduleSessionReminders } from "@/lib/server/jobs";
 import { displayName, loadProfilesByIds } from "@/lib/server/people";
-import { activeSessionBusyRanges, calendarBusyRanges, pairAllowed } from "@/lib/server/safety";
+import { assertSlotStillBookable, listBookableSlots } from "@/lib/server/availability";
+import { pairAllowed } from "@/lib/server/safety";
 
 async function eligibilityPair(requesterId: string, receiverId: string) {
   const db = await getDb();
@@ -51,32 +52,21 @@ async function eligibilityPair(requesterId: string, receiverId: string) {
 export async function listSlotsForAlly(
   allyId: string,
   format: RequestFormat,
-  opts?: { excludeSessionId?: string }
+  opts?: { excludeSessionId?: string; hostId?: string; guestId?: string }
 ) {
   const current = await requireMarketplaceUser();
-  const db = await getDb();
-  const now = await getNow();
-  const [ally] = await db.select().from(profiles).where(eq(profiles.userId, allyId));
-  if (!ally) throw new Error("We couldn’t find that ally.");
-  const { availabilityWindows } = await import("@/lib/db/schema");
-  const windows = await db
-    .select()
-    .from(availabilityWindows)
-    .where(eq(availabilityWindows.userId, allyId));
-  const busy = [
-    ...(await activeSessionBusyRanges(allyId, opts?.excludeSessionId)),
-    ...(await activeSessionBusyRanges(current.id, opts?.excludeSessionId)),
-    ...(await calendarBusyRanges(allyId)),
-  ];
-  return generateBookableSlots({
-    windows,
-    timezone: ally.timezone,
+  const hostId = opts?.hostId || allyId;
+  const guestId = opts?.guestId || current.id;
+  if (current.id !== hostId && current.id !== guestId) {
+    throw new Error("You don’t have access to that schedule.");
+  }
+  const listing = await listBookableSlots({
+    hostId,
+    guestId,
     format,
-    now,
-    busy,
-    availableFrom: ally.availableFrom,
-    availableUntil: ally.availableUntil,
-  }).slice(0, 72);
+    excludeSessionId: opts?.excludeSessionId,
+  });
+  return listing;
 }
 
 export async function createPracticeRequest(input: {
@@ -87,7 +77,7 @@ export async function createPracticeRequest(input: {
   openToTwoWay?: boolean;
 }) {
   const current = await requireMarketplaceUser();
-  const { receiver, requesterPerson, receiverPerson, allowed } = await eligibilityPair(
+  const { requesterPerson, receiverPerson, allowed } = await eligibilityPair(
     current.id,
     input.allyId
   );
@@ -100,9 +90,17 @@ export async function createPracticeRequest(input: {
   const now = await getNow();
   const format: RequestFormat = "interview_me";
   let proposedStartUtc = input.startIso ? new Date(input.startIso) : null;
-  let proposedEndUtc = proposedStartUtc
-    ? new Date(proposedStartUtc.getTime() + sessionDurationMinutes(format) * 60 * 1000)
-    : null;
+  let proposedEndUtc: Date | null = null;
+  if (input.startIso) {
+    const match = await assertSlotStillBookable({
+      hostId: input.allyId,
+      guestId: current.id,
+      format,
+      startIso: input.startIso,
+    });
+    proposedStartUtc = match.startUtc;
+    proposedEndUtc = match.endUtc;
+  }
   const id = nanoid();
   await db.insert(practiceRequests).values({
     id,
@@ -210,8 +208,14 @@ export async function respondToRequest(input: {
   if (input.action === "propose") {
     if (!input.startIso) throw new Error("Choose a time to propose.");
     const format = request.format as RequestFormat;
-    const start = new Date(input.startIso);
-    const end = new Date(start.getTime() + sessionDurationMinutes(format) * 60 * 1000);
+    const match = await assertSlotStillBookable({
+      hostId: request.receiverId,
+      guestId: request.requesterId,
+      format,
+      startIso: input.startIso,
+    });
+    const start = match.startUtc;
+    const end = match.endUtc;
     await db
       .update(practiceRequests)
       .set({
@@ -314,14 +318,16 @@ export async function respondToRequest(input: {
       end = new Date(start.getTime() + sessionDurationMinutes(format) * 60 * 1000);
     }
 
-    const busy = [
-      ...(await activeSessionBusyRanges(request.requesterId)),
-      ...(await activeSessionBusyRanges(request.receiverId)),
-      ...(await calendarBusyRanges(request.requesterId)),
-      ...(await calendarBusyRanges(request.receiverId)),
-    ];
-    const conflict = busy.some((range) => rangesOverlap(start, end, range.start, range.end));
-    if (conflict) {
+    try {
+      await assertSlotStillBookable({
+        hostId: request.receiverId,
+        guestId: request.requesterId,
+        format,
+        startIso: start.toISOString(),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message.includes("calendar") || message.includes("Calendar")) throw error;
       await db
         .update(practiceRequests)
         .set({ state: "time_unavailable", updatedAt: now })
@@ -349,11 +355,21 @@ export async function respondToRequest(input: {
     }
 
     try {
-      const sessionId = nanoid();
-      await db.transaction(async (tx) => {
+      const booked = await db.transaction(async (tx) => {
+        for (const userId of bookingLockIds(request.requesterId, request.receiverId)) {
+          await tx.update(profiles).set({ updatedAt: now }).where(eq(profiles.userId, userId));
+        }
+        const [already] = await tx
+          .select()
+          .from(practiceSessions)
+          .where(eq(practiceSessions.requestId, request.id))
+          .limit(1);
+        if (already && isBlockingSessionState(already.state)) {
+          return { sessionId: already.id, created: false };
+        }
         const existing = await tx.select().from(practiceSessions);
         const overlap = existing
-          .filter((row) => row.state === "scheduled" || row.state === "awaiting_attendance")
+          .filter((row) => isBlockingSessionState(row.state))
           .filter(
             (row) =>
               row.requesterId === request.requesterId ||
@@ -365,6 +381,7 @@ export async function respondToRequest(input: {
         if (overlap) {
           throw new Error("TIME_UNAVAILABLE");
         }
+        const sessionId = nanoid();
         await tx.insert(practiceSessions).values({
           id: sessionId,
           requestId: request.id,
@@ -390,7 +407,12 @@ export async function respondToRequest(input: {
             updatedAt: now,
           })
           .where(eq(practiceRequests.id, request.id));
+        return { sessionId, created: true };
       });
+      const sessionId = booked.sessionId;
+      if (!booked.created) {
+        return { ok: true as const, state, sessionId };
+      }
       await enqueueJob("provision_meet", now, `meet:${sessionId}`, { sessionId });
       await scheduleSessionReminders(sessionId, start, end);
       const copy =
